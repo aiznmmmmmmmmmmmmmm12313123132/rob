@@ -25,26 +25,30 @@ ISLAND_R = 300.0
 GROUND = 0.0
 CLOUD_Y = GROUND - 120
 CULL = -0.2
+MAX_RADIUS = 950
+MAX_FACE_EDGE = 1900
 
 LAYERS = [
-    dict(name="Near", count=9, gap=(950, 1400), height=(450, 850), spire=0.55, detail=3, haze=0.0),
-    dict(name="Mid", count=14, gap=(1750, 2500), height=(520, 980), spire=0.45, detail=2, haze=0.28),
-    dict(name="Far", count=20, gap=(2900, 3900), height=(600, 1150), spire=0.35, detail=1, haze=0.52),
-    dict(name="Horizon", count=11, gap=(4400, 5300), height=(500, 1000), spire=0.0, detail=0, haze=0.74),
+    dict(name="Near", count=9, gap=(1800, 2600), height=(850, 1500), spire=0.5, bricks=(7, 11), detail=3, haze=0.05),
+    dict(name="Mid", count=13, gap=(3200, 4400), height=(1000, 1750), spire=0.4, bricks=(4, 7), detail=2, haze=0.3),
+    dict(name="Far", count=18, gap=(5000, 6600), height=(1150, 1950), spire=0.3, bricks=(2, 4), detail=1, haze=0.55),
+    dict(name="Horizon", count=12, gap=(7200, 9000), height=(1000, 1900), spire=0, bricks=(0, 0), detail=0, haze=0.75),
 ]
-CLOUD_RINGS = [(450, 12), (1500, 16), (2700, 18)]
-FLOOR_REACH = 6200
+CLOUD_RINGS = [(600, 12), (1900, 16), (3600, 18)]
+FLOOR_REACH = 10500
 
 
 def rgb(r, g, b):
     return np.array([r, g, b], dtype=float) / 255
 
 
-ROCK_LIT, ROCK_SHADOW = rgb(238, 164, 138), rgb(150, 96, 128)
-ROCK_GLOW, ROCK_DEEP = rgb(252, 214, 200), rgb(104, 64, 98)
-HAZE_TINT = rgb(236, 172, 170)
-CLOUD_COLOR, FLOOR_COLOR = rgb(252, 226, 222), rgb(230, 184, 188)
-HORIZON_SKY, ZENITH_SKY = rgb(245, 178, 160), rgb(140, 160, 205)
+ROCK_LIT, ROCK_SHADOW = rgb(126, 188, 255), rgb(72, 128, 226)
+ROCK_GLOW, ROCK_DEEP = rgb(205, 232, 255), rgb(52, 98, 200)
+BRICK = rgb(96, 156, 240)
+HAZE_TINT = rgb(150, 200, 255)
+CLOUD_COLOR, FLOOR_COLOR = rgb(255, 255, 255), rgb(226, 239, 255)
+HORIZON_SKY, ZENITH_SKY = rgb(178, 214, 255), rgb(30, 135, 255)
+ISLAND_COLOR = rgb(150, 220, 60)
 
 SUN = np.array([0.35, 0.75, 0.55]); SUN /= np.linalg.norm(SUN)
 side = np.array([SUN[0], 0, SUN[2]]); side /= np.linalg.norm(side)
@@ -60,8 +64,25 @@ def direction(a):
     return np.array([math.cos(a), 0, math.sin(a)])
 
 
+def jitter(c, amount):
+    return np.clip(c + rng.uniform(-amount, amount), 0, 1)
+
+
 triangles = []  # (a, b, c, color, normal)
-wedges = 0
+part_count = 0
+
+
+def emit_triangle(a, b, c, color, n):
+    """Mirror of the Luau triangle(): splits oversized faces, 2 wedges each."""
+    global part_count
+    longest = max(np.linalg.norm(b - a), np.linalg.norm(c - b), np.linalg.norm(a - c))
+    if longest > MAX_FACE_EDGE:
+        ab, bc, ca = (a + b) / 2, (b + c) / 2, (c + a) / 2
+        for t in ((a, ab, ca), (ab, b, bc), (ca, bc, c), (ab, bc, ca)):
+            emit_triangle(*t, color, n)
+        return
+    triangles.append((a, b, c, color, n))
+    part_count += 2
 
 
 def face_color(n, centroid, shading):
@@ -69,27 +90,23 @@ def face_color(n, centroid, shading):
     c = lerp(ROCK_SHADOW, ROCK_LIT, lit ** 0.8)
     hf = min(max((centroid[1] - shading["base"]) / shading["height"], 0), 1)
     glow = max(min(max((n[1] - 0.2) / 0.5, 0), 1), lit * 0.5) * hf ** 1.5
-    c = lerp(c, ROCK_GLOW, glow * 0.7)
-    c = lerp(c, ROCK_DEEP, (1 - hf) ** 2 * 0.45)
-    c = lerp(c, HAZE_TINT, shading["haze"])
-    return np.clip(c + rng.uniform(-0.025, 0.025), 0, 1)
+    c = lerp(c, ROCK_GLOW, glow * 0.75)
+    c = lerp(c, ROCK_DEEP, (1 - hf) ** 2 * 0.4)
+    return jitter(lerp(c, HAZE_TINT, shading["haze"]), 0.02)
 
 
 def face(a, b, c, inside, shading):
-    global wedges
     centroid = (a + b + c) / 3
     n = np.cross(b - a, c - a)
     if np.linalg.norm(n) < 1e-3:
         return
     n = n / np.linalg.norm(n)
-    outward = np.array([centroid[0] - inside[0], 0, centroid[2] - inside[2]])
-    if n @ outward < 0:
+    if n @ np.array([centroid[0] - inside[0], 0, centroid[2] - inside[2]]) < 0:
         n = -n
     to_view = VIEW - centroid
     if n @ (to_view / np.linalg.norm(to_view)) < CULL:
         return
-    triangles.append((a, b, c, face_color(n, centroid, shading), n))
-    wedges += 2
+    emit_triangle(a, b, c, face_color(n, centroid, shading), n)
 
 
 def quad(a, b, c, d, inside, shading):
@@ -99,40 +116,61 @@ def quad(a, b, c, d, inside, shading):
         face(a, b, d, inside, shading); face(b, c, d, inside, shading)
 
 
-def build_cone(base, height, radius, sides, rings, power, lean, shading):
+def box(size, center, yaw, color):
+    """A Block part, as 12 triangles for the rasterizer (1 part in Roblox)."""
+    global part_count
+    part_count += 1
+    size = np.minimum(size, 2040)
+    c, s = math.cos(yaw), math.sin(yaw)
+    ax, az = np.array([c, 0, -s]), np.array([s, 0, c])
+    hx, hy, hz = size / 2
+    corners = {}
+    for i in (-1, 1):
+        for j in (-1, 1):
+            for k in (-1, 1):
+                corners[(i, j, k)] = center + ax * hx * i + np.array([0, hy * j, 0]) + az * hz * k
+    faces = [((1, 0, 0), [(1, -1, -1), (1, 1, -1), (1, 1, 1), (1, -1, 1)]),
+             ((-1, 0, 0), [(-1, -1, -1), (-1, -1, 1), (-1, 1, 1), (-1, 1, -1)]),
+             ((0, 1, 0), [(-1, 1, -1), (-1, 1, 1), (1, 1, 1), (1, 1, -1)]),
+             ((0, 0, 1), [(-1, -1, 1), (1, -1, 1), (1, 1, 1), (-1, 1, 1)]),
+             ((0, 0, -1), [(-1, -1, -1), (-1, 1, -1), (1, 1, -1), (1, -1, -1)])]
+    for (nx, ny, nz), quad_corners in faces:
+        n = ax * nx + np.array([0, ny, 0]) + az * nz
+        p = [corners[q] for q in quad_corners]
+        triangles.append((p[0], p[1], p[2], color, n))
+        triangles.append((p[0], p[2], p[3], color, n))
+
+
+def build_spire(base, height, radius, sides, rings, power, lean, shading):
+    ridges = [rng.uniform(1.05, 1.35) if (s + 1) % 2 == 0 else rng.uniform(0.7, 0.92) for s in range(sides)]
     vrings = []
     twist = rng.uniform(0, 2 * math.pi)
-    bottom = CLOUD_Y - 30
-    ridges = [rng.uniform(1.05, 1.35) if (s + 1) % 2 == 0 else rng.uniform(0.7, 0.92) for s in range(sides)]
     for ring in range(rings):
         t = ring / rings
         rr = radius * (1 - t) ** power
         if ring == rings - 1:
             rr *= 0.75
-        rc = base + lean * height * t
-        y = bottom + (base[1] + height - bottom) * t
+        rc = base + lean * height * t + np.array([0, height * t, 0])
         verts = []
         for s in range(sides):
             ang = twist + (s + rng.uniform(-0.12, 0.12)) / sides * 2 * math.pi
             reach = rr * ridges[s] * rng.uniform(0.9, 1.1)
             if ring > 0 and rng.random() < 0.15:
                 reach *= 1.25
-            jy = rng.uniform(-0.12, 0.12) * height / rings if ring > 0 else 0
-            v = rc + direction(ang) * reach
-            v[1] = y + jy
-            verts.append(v)
+            lift = rng.uniform(-0.12, 0.12) * height / rings if ring > 0 else 0
+            verts.append(rc + direction(ang) * reach + np.array([0, lift, 0]))
         vrings.append(verts)
         twist += rng.uniform(-0.15, 0.15)
     apex = base + lean * height + np.array([0, height, 0])
-    axis = base + lean * height * 0.5
+    inside = base + lean * height * 0.5
     for ring in range(rings - 1):
         lo, up = vrings[ring], vrings[ring + 1]
         for s in range(sides):
             n = (s + 1) % sides
-            quad(lo[s], lo[n], up[n], up[s], axis, shading)
+            quad(lo[s], lo[n], up[n], up[s], inside, shading)
     top = vrings[-1]
     for s in range(sides):
-        face(top[s], top[(s + 1) % sides], apex, axis, shading)
+        face(top[s], top[(s + 1) % sides], apex, inside, shading)
     return apex
 
 
@@ -143,49 +181,58 @@ def build_peak(layer, base):
     detail = layer["detail"]
     spire = rng.random() < layer["spire"]
     height = rng.uniform(*layer["height"])
-    radius = height / (rng.uniform(2.6, 4.2) if spire else rng.uniform(1.3, 2.2))
+    radius = min(height / (rng.uniform(2.6, 4) if spire else rng.uniform(1.4, 2.2)), MAX_RADIUS)
     shading = dict(haze=layer["haze"], base=CLOUD_Y, height=height)
-    lean = direction(rng.uniform(0, 2 * math.pi)) * rng.uniform(0, 0.12 if spire else 0.2)
-    apex = build_cone(base, height, radius, 8 if detail >= 3 else (7 if detail == 2 else 6),
-                      4 if detail >= 3 else 3, rng.uniform(0.45, 0.7) if spire else rng.uniform(0.9, 1.4), lean, shading)
+    lean = direction(rng.uniform(0, 2 * math.pi)) * rng.uniform(0, 0.1 if spire else 0.16)
+    foot = np.array([base[0], CLOUD_Y - 40, base[2]])
+    apex = build_spire(foot, height + 40, radius, 8 if detail >= 3 else (7 if detail == 2 else 6),
+                       4 if detail >= 3 else 3, rng.uniform(0.45, 0.7) if spire else rng.uniform(0.9, 1.4), lean, shading)
     n = rng.randint(2, 3) if detail >= 3 else (rng.randint(1, 2) if detail == 2 else rng.randint(0, 1))
     for _ in range(n):
         off = direction(rng.uniform(0, 2 * math.pi)) * radius * rng.uniform(0.45, 0.9)
-        build_cone(base + off, height * rng.uniform(0.3, 0.65), radius * rng.uniform(0.45, 0.7),
-                   6 if detail >= 3 else 5, 3 if detail >= 3 else 2,
-                   rng.uniform(0.5, 0.8) if spire else rng.uniform(0.9, 1.3),
-                   lean + direction(rng.uniform(0, 2 * math.pi)) * 0.08, shading)
+        build_spire(foot + off, height * rng.uniform(0.3, 0.65) + 40, radius * rng.uniform(0.45, 0.7),
+                    6 if detail >= 3 else 5, 3 if detail >= 3 else 2,
+                    rng.uniform(0.5, 0.8) if spire else rng.uniform(0.9, 1.3),
+                    lean + direction(rng.uniform(0, 2 * math.pi)) * 0.08, shading)
+    for _ in range(rng.randint(*layer["bricks"])):
+        size = min(radius * rng.uniform(0.12, 0.24), 170)
+        bh = size * rng.uniform(0.8, 1.4)
+        off = direction(rng.uniform(0, 2 * math.pi)) * radius * rng.uniform(0.7, 0.98)
+        pos = np.array([base[0] + off[0], CLOUD_Y + bh * rng.uniform(0.05, 0.4), base[2] + off[2]])
+        color = jitter(lerp(lerp(ROCK_DEEP, BRICK, rng.uniform(0.3, 0.8)), HAZE_TINT, layer["haze"]), 0.03)
+        box(np.array([size * 2, bh, size * 2 * rng.uniform(0.8, 1)]), pos, rng.uniform(0, math.pi / 2), color)
+        if rng.random() < 0.3:
+            top = size * rng.uniform(0.45, 0.7)
+            nudge = direction(rng.uniform(0, 2 * math.pi)) * size * 0.3
+            box(np.array([top * 2, top * rng.uniform(0.8, 1.3), top * 2]),
+                pos + nudge + np.array([0, bh / 2 + top * 0.4, 0]), rng.uniform(0, math.pi / 2),
+                jitter(lerp(color, ROCK_LIT, 0.25), 0.03))
     return dict(position=apex, radius=radius * 0.6), radius
 
 
 def build_range(layer, angle, distance):
     height = rng.uniform(*layer["height"])
     arc = height * rng.uniform(1.8, 3)
-    segs = rng.randint(6, 9)
-    depth = height * 0.9
+    segs = rng.randint(5, 7)
     out, tan = direction(angle), direction(angle + math.pi / 2)
     shading = dict(haze=layer["haze"], base=CLOUD_Y, height=height)
     middle = out * distance
     behind = middle + out * 5000
-    bots, mids, tops = [], [], []
+    bots, tops = [], []
     for i in range(segs + 1):
         s = i / segs
         along = middle + tan * (s - 0.5) * arc
         taper = math.sin(s * math.pi) ** 0.6
         ridge = rng.uniform(0.7, 1) if i % 2 == 0 else rng.uniform(0.35, 0.62)
         rh = height * max(ridge * taper, 0.12)
-        sway = tan * rng.uniform(-0.3, 0.3) * arc / segs
-        t = along + out * rng.uniform(0, 60) + sway
+        t = along + out * rng.uniform(0, 80) + tan * rng.uniform(-0.3, 0.3) * arc / segs
         tops.append(np.array([t[0], CLOUD_Y + rh, t[2]]))
-        m = along - out * depth * 0.45 + sway * 0.5
-        mids.append(np.array([m[0], CLOUD_Y + rh * rng.uniform(0.4, 0.55), m[2]]))
-        b = along - out * depth
-        bots.append(np.array([b[0], CLOUD_Y - 30, b[2]]))
+        b = along - out * height * rng.uniform(0.5, 0.9)
+        bots.append(np.array([b[0], CLOUD_Y - 40, b[2]]))
         if ridge >= 0.7:
             peaks.append(dict(position=tops[-1], radius=arc / segs * 0.5))
     for i in range(segs):
-        quad(bots[i], bots[i + 1], mids[i + 1], mids[i], behind, shading)
-        quad(mids[i], mids[i + 1], tops[i + 1], tops[i], behind, shading)
+        quad(bots[i], bots[i + 1], tops[i + 1], tops[i], behind, shading)
 
 
 def noise(x, y, z):
@@ -208,8 +255,8 @@ for li, layer in enumerate(LAYERS, start=1):
             peaks.append(p)
             if layer["detail"] >= 2:
                 cloud_spots.append((base, r))
+mountain_parts = part_count
 
-# Clouds: sample each emitter's steady state.
 emitters = []
 for gap, rate in [(120, 0.45), (320, 0.3)]:
     sr = ISLAND_R + gap
@@ -225,10 +272,10 @@ for gap, count in CLOUD_RINGS:
         a = ph + (i + rng.uniform(-0.3, 0.3)) / count * 2 * math.pi
         emitters.append((direction(a) * (ISLAND_R + gap + rng.uniform(-150, 150)), 800, 0.3))
 reach = ISLAND_R + FLOOR_REACH
-tiles = math.ceil(reach * 2 / 2048)
-first = -(tiles - 1) * 2048 / 2
+tiles = math.ceil(reach * 2 / 2040)
+first = -(tiles - 1) * 2040 / 2
 floor_tiles = sum(1 for ix in range(tiles) for iz in range(tiles)
-                  if math.hypot(max(abs(first + ix * 2048) - 1024, 0), max(abs(first + iz * 2048) - 1024, 0)) <= reach)
+                  if math.hypot(max(abs(first + ix * 2040) - 1020, 0), max(abs(first + iz * 2040) - 1020, 0)) <= reach)
 puffs = []
 for pos, width, rate in emitters:
     for _ in range(int(round(rate * 37.5))):
@@ -244,32 +291,29 @@ for pos, width, rate in emitters:
                             rng.uniform(-width / 2, width / 2)])
         puffs.append((p, size, alpha))
 
-print(f"faces {len(triangles)} -> wedges {wedges}; emitters {len(emitters)}; floor tiles {floor_tiles}; "
-      f"total parts ~{wedges + len(emitters) + floor_tiles}; particles ~{len(puffs)}")
+print(f"mountain parts {mountain_parts}; emitters {len(emitters)}; floor tiles {floor_tiles}; "
+      f"total parts ~{mountain_parts + len(emitters) + floor_tiles}; particles ~{len(puffs)}")
 
 
 # ---------------------------------------------------------------- rendering
 
 def haze_amount(dist):
-    return 1 - np.exp(-np.power(np.maximum(dist, 0) / 3000.0, 1.3))
+    return 1 - np.exp(-np.power(np.maximum(dist, 0) / 5500.0, 1.3))
 
 
 def sky(dirs):
-    t = np.power(np.clip(dirs[..., 1], 0, 1), 0.5)[..., None]
+    t = np.power(np.clip(dirs[..., 1], 0, 1), 0.45)[..., None]
     col = HORIZON_SKY * (1 - t) + ZENITH_SKY * t
     glow = np.clip(dirs @ SUN, 0, 1)[..., None] ** 30 * 0.3
     return np.clip(col + glow, 0, 1)
 
 
 def render(eye, dirs, project):
-    """dirs: HxWx3 unit rays; project(points Nx3) -> (x, y, dist) arrays."""
     h, w, _ = dirs.shape
     zbuf = np.full((h, w), np.inf)
     img = sky(dirs)
-    shade_tris = sorted(triangles, key=lambda t: -np.linalg.norm((t[0] + t[1] + t[2]) / 3 - eye))
-    for a, b, c, col, n in shade_tris:
-        pts = np.array([a, b, c])
-        xs, ys, ds = project(pts)
+    for a, b, c, col, n in triangles:
+        xs, ys, ds = project(np.array([a, b, c]))
         if xs is None:
             continue
         variants = [xs]
@@ -300,23 +344,19 @@ def render(eye, dirs, project):
             f = haze_amount(d[m])[:, None]
             region = img[y0:y1 + 1, x0:x1 + 1]
             region[m] = np.clip(col * lit, 0, 1) * (1 - f) + HORIZON_SKY * f
-    # cloud floor
     with np.errstate(divide="ignore", invalid="ignore"):
         tf = (CLOUD_Y - eye[1]) / dirs[..., 1]
     fp = eye + dirs * np.where(np.isfinite(tf), tf, 0)[..., None]
     on_floor = (tf > 0) & (np.hypot(fp[..., 0], fp[..., 2]) < reach) & (tf < zbuf)
     f = haze_amount(np.where(on_floor, tf, 0))[..., None]
-    floor_col = FLOOR_COLOR * (0.58 + 0.55 * SUN[1])
-    img = np.where(on_floor[..., None], floor_col * (1 - f) + HORIZON_SKY * f, img)
+    img = np.where(on_floor[..., None], FLOOR_COLOR * (0.58 + 0.55 * SUN[1]) * (1 - f) + HORIZON_SKY * f, img)
     zbuf = np.where(on_floor, tf, zbuf)
-    # island stand-in
     with np.errstate(divide="ignore", invalid="ignore"):
         ti = (GROUND - eye[1]) / dirs[..., 1]
     ip = eye + dirs * np.where(np.isfinite(ti), ti, 0)[..., None]
     on_island = (ti > 0) & (np.hypot(ip[..., 0], ip[..., 2]) < ISLAND_R) & (ti < zbuf)
-    img = np.where(on_island[..., None], rgb(96, 150, 74) * 0.95, img)
+    img = np.where(on_island[..., None], ISLAND_COLOR, img)
     zbuf = np.where(on_island, ti, zbuf)
-    # cloud puffs, back to front
     for pos, size, alpha in sorted(puffs, key=lambda q: -np.linalg.norm(q[0] - eye)):
         xs, ys, ds = project(pos[None, :])
         if xs is None:
@@ -333,7 +373,7 @@ def render(eye, dirs, project):
         g = np.exp(-(((xx - x) ** 2 + (yy - y) ** 2) / (2 * (r * 0.6) ** 2))) * alpha
         g = np.where(zbuf[y0:y1, x0:x1] > dist, g, 0)[..., None]
         fh = float(haze_amount(np.array(dist)))
-        col = np.clip(CLOUD_COLOR * 0.95 * (1 - fh) + HORIZON_SKY * fh, 0, 1)
+        col = np.clip(CLOUD_COLOR * 0.97 * (1 - fh) + HORIZON_SKY * fh, 0, 1)
         img[y0:y1, x0:x1] = img[y0:y1, x0:x1] * (1 - g) + col * g
     return img
 
@@ -383,7 +423,9 @@ def save(img, path):
     Image.fromarray((np.clip(img, 0, 1) ** (1 / 1.1) * 255).astype(np.uint8)).save(path)
 
 
-save(perspective(np.array([0.0, GROUND + 14, ISLAND_R - 40]), 0, 6), f"{OUT}/mountains-view-1.png")
-save(perspective(np.array([ISLAND_R - 40, GROUND + 14, 0.0]), 90, 6), f"{OUT}/mountains-view-2.png")
+# Far-to-near so the z-buffer does less work.
+triangles.sort(key=lambda t: -np.linalg.norm((t[0] + t[1] + t[2]) / 3))
+save(perspective(np.array([0.0, GROUND + 14, ISLAND_R - 40]), 0, 8), f"{OUT}/mountains-view-1.png")
+save(perspective(np.array([ISLAND_R - 40, GROUND + 14, 0.0]), 90, 8), f"{OUT}/mountains-view-2.png")
 save(panorama(np.array([0.0, GROUND + 14, 0.0])), f"{OUT}/mountains-panorama.png")
 print("saved previews")
