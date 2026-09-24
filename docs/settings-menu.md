@@ -65,14 +65,14 @@ Studio Properties window shows them.
 
 | Property | Value |
 | --- | --- |
-| AnchorPoint | `0.5, 0.5` |
-| Position | `{1, -44}, {0, 44}` |
+| AnchorPoint | `1, 0` |
+| Position | `{1, -16}, {0, 16}` |
 | Size | `{0, 56}, {0, 56}` |
 
-The centred AnchorPoint makes the hover scale grow from the middle. A 56 px
-button centred 44 px from the corner leaves a 16 px margin. At runtime the
-script moves it down by the height of Roblox's top bar (`GuiService:GetGuiInset()`)
-so it never overlaps the Roblox buttons.
+Anchoring to the top-right corner makes any scale-up (hover, or the bigger UI
+on a TV) grow inward instead of off-screen. `UIScaleController`
+(see [cross-platform.md](cross-platform.md)) pushes the button below Roblox's
+top bar and away from notches at runtime.
 
 **SettingsButton > UIScale**: Scale `1`
 
@@ -95,7 +95,9 @@ so it never overlaps the Roblox buttons.
 BackgroundTransparency `1`, Text `Settings`, TextXAlignment `Left`
 
 **CloseButton** (TextButton): AnchorPoint `1, 0`, Position `{1, -16}, {0, 16}`,
-Size `{0, 36}, {0, 36}`, Text `X`
+Size `{0, 36}, {0, 36}`, Text `X`, Modal `true`. The script also sets Modal.
+A visible Modal button frees the mouse, so the menu stays clickable during
+Shift Lock.
 
 **BGMRow** (Frame): Position `{0, 24}, {0, 88}`, Size `{1, -48}, {0, 40}`,
 BackgroundTransparency `1`
@@ -148,15 +150,20 @@ It stops without changing anything if `SettingsGui` already exists.
 
 ## 3. How it works
 
-- **Hover:** `MouseEnter` and `MouseLeave` tween `SettingsButton.UIScale` to 1.1
-  and back to 1. The effect is skipped for touch input, because a tap can fire
+- **Hover:** `MouseEnter` and `MouseLeave` tween `SettingsButton.UIScale` to 1.1×
+  and back to 1×. The effect is skipped for touch input, because a tap can fire
   `MouseEnter` without a matching `MouseLeave`, which would leave the button
   stuck enlarged.
 - **Open:** clicking the button makes the menu visible and tweens
-  `SettingsMenu.UIScale` from 0 to 1 with `EasingStyle.Back` / `Out`, which
-  overshoots slightly and then settles. Clicking the button again, or **X**,
-  plays `Back` / `In` down to 0 and then hides the frame. Reopening in the
-  middle of a close cancels the close cleanly.
+  `SettingsMenu.UIScale` from 0 to full size with `EasingStyle.Back` / `Out`,
+  which overshoots slightly and then settles. Clicking the button again, or
+  **X**, plays `Back` / `In` down to 0 and then hides the frame. Reopening in
+  the middle of a close cancels the close cleanly.
+- **Device scale:** "full size" and "1×" mean the `BaseScale` attribute that
+  `UIScaleController` writes on each UIScale. It is 1 when that script isn't
+  running.
+- **Gamepad:** opening the menu with a controller selects the slider. D-pad
+  left and right change the volume in 10% steps, and **B** closes the menu.
 - **Slider math:** `fraction = math.clamp((pointerX - Track.AbsolutePosition.X) / Track.AbsoluteSize.X, 0, 1)`.
   Dragging past either end clamps to 0 or 1, so the knob stops at the ends. The
   label shows `math.round(fraction * 100) .. "%"`, and `BGMGroup.Volume` is set
@@ -177,11 +184,14 @@ It stops without changing anything if `SettingsGui` already exists.
 
 - **Leaderboard:** if the game uses `leaderstats`, Roblox's player list sits in
   the top-right corner under the top bar and can cover the button. Either move
-  the button left, for example to `{1, -120}, {0, 44}`, or hide the default
+  the button left, for example to `{1, -96}, {0, 16}`, or hide the default
   list with `StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, false)`.
 - **Persistence:** the volume resets when the player rejoins. To save it, send
   the value to the server through a RemoteEvent, store it in the player's
   saved data, and pass it to `setSliderFraction` on join.
+- **Performance Mode row:** `PerformanceController` adds a `PerformanceRow`
+  56 px below `BGMRow` at runtime, and grows the menu height and MaxSize by
+  56 px to fit it.
 - **More settings:** copy `BGMRow` for new rows, such as an SFX slider driving
   an `SFXGroup`, and move each copy down by about 56 px. Raise the menu height
   and the UISizeConstraint's MaxSize to match.

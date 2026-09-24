@@ -57,8 +57,8 @@ local gui = make("ScreenGui", {
 }, {
 	make("TextButton", {
 		Name = "SettingsButton",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(1, -44, 0, 44),
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -16, 0, 16),
 		Size = UDim2.fromOffset(56, 56),
 		BackgroundColor3 = PANEL,
 		Font = FONT,
@@ -107,6 +107,7 @@ local gui = make("ScreenGui", {
 			Position = UDim2.new(1, -16, 0, 16),
 			Size = UDim2.fromOffset(36, 36),
 			BackgroundColor3 = DANGER,
+			Modal = true,
 			Font = FONT,
 			Text = "X",
 			TextColor3 = TEXT,

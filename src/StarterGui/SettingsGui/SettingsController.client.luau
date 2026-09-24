@@ -12,6 +12,14 @@
 	in other SoundGroups (or none), so they are never affected. A SoundGroup
 	volume set from a LocalScript only changes what this player hears.
 
+	Works with the cross-platform scripts in StarterPlayerScripts:
+	  - UIScaleController keeps the button clear of the top bar and notches,
+	    and publishes a "BaseScale" attribute on both UIScales here. The hover
+	    and pop-in animations multiply by it (1 when that script isn't running).
+	  - PerformanceController adds its Performance Mode row to this menu.
+	Gamepad: the slider is selected when the menu opens, D-pad left/right
+	changes the volume, and ButtonB closes the menu.
+
 	The UI hierarchy this script expects is documented in docs/settings-menu.md.
 ]]
 
@@ -28,6 +36,8 @@ local BGM_GROUP_NAME = "BGMGroup"
 local DEFAULT_VOLUME = 0.5 -- 0-1, used only until BGMGroup exists
 
 local HOVER_SCALE = 1.1
+local GAMEPAD_STEP = 0.1 -- volume change per D-pad press
+local BASE_SCALE_ATTRIBUTE = "BaseScale"
 local HOVER_TWEEN = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local OPEN_TWEEN = TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 local CLOSE_TWEEN = TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.In)
@@ -52,16 +62,10 @@ local track = slider:WaitForChild("Track") :: Frame
 local fill = track:WaitForChild("Fill") :: Frame
 local knob = slider:WaitForChild("Knob") :: Frame
 
---------------------------------------------------------------------------------
--- Top bar clearance
---------------------------------------------------------------------------------
-
--- With IgnoreGuiInset = true, Y = 0 is the very top of the screen, which is
--- where Roblox draws its own top bar. Shift the button down by the top bar's
--- height so the two never overlap, whichever top bar version the player has.
-if gui.IgnoreGuiInset then
-	local topLeftInset = GuiService:GetGuiInset()
-	settingsButton.Position += UDim2.fromOffset(0, topLeftInset.Y)
+-- The device-wide scale UIScaleController has chosen for this UIScale.
+local function baseScaleOf(uiScale: UIScale): number
+	local value = uiScale:GetAttribute(BASE_SCALE_ATTRIBUTE)
+	return if typeof(value) == "number" then value else 1
 end
 
 --------------------------------------------------------------------------------
@@ -208,7 +212,10 @@ UserInputService.WindowFocusReleased:Connect(endDrag)
 -- Settings button hover
 --------------------------------------------------------------------------------
 
-local function tweenButtonScale(scale: number)
+local isHovered = false
+
+local function refreshButtonScale()
+	local scale = baseScaleOf(buttonScale) * (if isHovered then HOVER_SCALE else 1)
 	TweenService:Create(buttonScale, HOVER_TWEEN, { Scale = scale }):Play()
 end
 
@@ -216,13 +223,17 @@ settingsButton.MouseEnter:Connect(function()
 	-- A tap can fire MouseEnter with no matching MouseLeave, which would leave
 	-- the button stuck enlarged on touch screens. Hover is a mouse-only effect.
 	if UserInputService:GetLastInputType() ~= Enum.UserInputType.Touch then
-		tweenButtonScale(HOVER_SCALE)
+		isHovered = true
+		refreshButtonScale()
 	end
 end)
 
 settingsButton.MouseLeave:Connect(function()
-	tweenButtonScale(1)
+	isHovered = false
+	refreshButtonScale()
 end)
+
+buttonScale:GetAttributeChangedSignal(BASE_SCALE_ATTRIBUTE):Connect(refreshButtonScale)
 
 --------------------------------------------------------------------------------
 -- Menu open / close
@@ -253,7 +264,12 @@ local function openMenu()
 		settingsMenu.Visible = true
 	end
 	-- Back + Out overshoots slightly past full size, then settles: the "pop".
-	playMenuTween(OPEN_TWEEN, 1)
+	playMenuTween(OPEN_TWEEN, baseScaleOf(menuScale))
+
+	-- A gamepad has no pointer; start on the slider so the D-pad works straight away.
+	if string.sub(UserInputService:GetLastInputType().Name, 1, 7) == "Gamepad" then
+		GuiService.SelectedObject = slider
+	end
 end
 
 local function closeMenu()
@@ -262,6 +278,12 @@ local function closeMenu()
 	end
 	isOpen = false
 	endDrag()
+
+	-- Hand the gamepad back to gameplay instead of leaving it inside a closed menu.
+	local selected = GuiService.SelectedObject
+	if selected and selected:IsDescendantOf(settingsMenu) then
+		GuiService.SelectedObject = nil
+	end
 
 	local tween = playMenuTween(CLOSE_TWEEN, 0)
 	tween.Completed:Once(function(playbackState: Enum.PlaybackState)
@@ -282,13 +304,48 @@ end)
 
 closeButton.Activated:Connect(closeMenu)
 
+-- The device scale can change while the menu is open (rotation, resize).
+menuScale:GetAttributeChangedSignal(BASE_SCALE_ATTRIBUTE):Connect(function()
+	if isOpen then
+		playMenuTween(HOVER_TWEEN, baseScaleOf(menuScale))
+	end
+end)
+
+--------------------------------------------------------------------------------
+-- Gamepad
+--------------------------------------------------------------------------------
+
+-- Keep D-pad left/right on the slider so it changes the volume instead of
+-- moving the selection to another button.
+slider.NextSelectionLeft = slider
+slider.NextSelectionRight = slider
+
+UserInputService.InputBegan:Connect(function(input: InputObject)
+	if not isOpen then
+		return
+	end
+	if input.KeyCode == Enum.KeyCode.ButtonB then
+		closeMenu()
+	elseif GuiService.SelectedObject == slider then
+		if input.KeyCode == Enum.KeyCode.DPadLeft then
+			setSliderFraction(currentVolume - GAMEPAD_STEP)
+		elseif input.KeyCode == Enum.KeyCode.DPadRight then
+			setSliderFraction(currentVolume + GAMEPAD_STEP)
+		end
+	end
+end)
+
 --------------------------------------------------------------------------------
 -- Startup
 --------------------------------------------------------------------------------
 
 settingsMenu.Visible = false
 menuScale.Scale = 0
-buttonScale.Scale = 1
+buttonScale.Scale = baseScaleOf(buttonScale)
+
+-- A visible Modal button frees the mouse cursor, so the menu stays clickable
+-- while Shift Lock (or first person) would otherwise pin it to the centre.
+closeButton.Modal = true
 
 local bgmGroup = getBGMGroup()
 if bgmGroup then
