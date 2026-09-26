@@ -86,7 +86,7 @@ local rollRemote = ReplicatedStorage.Remotes.RollDice
 
 InputManager.bindButton("RollDice", hud.RollButton) -- click / tap / gamepad A
 InputManager.onAction("RollDice", function()
-	rollRemote:FireServer() -- keep the cooldown on the server
+	rollRemote:FireServer() -- the server enforces the cooldown (anti-cheat.md)
 end)
 
 local function refreshHint()

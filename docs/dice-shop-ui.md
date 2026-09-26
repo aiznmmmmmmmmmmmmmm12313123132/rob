@@ -71,6 +71,8 @@ local shopGui = Players.LocalPlayer.PlayerGui:WaitForChild("3DCartoonShopGui")
 shopGui.ShopAction.Event:Connect(function(itemId, action)
 	diceShopRemote:FireServer(itemId, action) -- keep prices and ownership on the server
 end)
+-- Server side: bind the handler with AntiCheat.bindRemote("DiceShop", ...);
+-- see anti-cheat.md.
 
 -- Show what the player owns. "Buy" shows the card's Price attribute;
 -- setting one card to "Equipped" switches the previous one back to "Equip".
