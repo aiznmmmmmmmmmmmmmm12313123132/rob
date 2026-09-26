@@ -57,6 +57,16 @@ type PlayerEntry = {
 	role: Role,
 }
 
+-- What almost every player gets on almost every sample: shared, read-only,
+-- so the movement loop doesn't allocate a profile per sample.
+local DEFAULT_PROFILE: MovementProfile = table.freeze({
+	speedMultiplier = 1,
+	maxSpeed = 0,
+	allowFlight = false,
+	allowNoclip = false,
+	modifierCount = 0,
+})
+
 local MAX_EXEMPTION_SECONDS = 120
 local MAX_SPEED_MULTIPLIER = 20
 local MAX_RIDE_SPEED = 1000
@@ -136,18 +146,13 @@ function ExemptionManager.new(clock: (() -> number)?): ExemptionManager
 		end
 	end
 
+	-- Read-only result: don't modify it.
 	local function getProfile(player: any): MovementProfile
-		local profile: MovementProfile = {
-			speedMultiplier = 1,
-			maxSpeed = 0,
-			allowFlight = false,
-			allowNoclip = false,
-			modifierCount = 0,
-		}
 		local entry = players[player]
-		if not entry then
-			return profile
+		if not entry or next(entry.modifiers) == nil then
+			return DEFAULT_PROFILE
 		end
+		local profile: MovementProfile = table.clone(DEFAULT_PROFILE)
 		local t = now()
 		for key, modifierEntry in entry.modifiers do
 			if modifierEntry.expires <= t then

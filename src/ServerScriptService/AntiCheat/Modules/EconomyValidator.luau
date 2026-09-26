@@ -92,13 +92,30 @@ function EconomyValidator.new(deps: EconomyDeps): EconomyValidator
 		return isValidAmount(balance) and isValidAmount(price) and balance >= price
 	end
 
-	local function record(player: Player, entry: LedgerEntry)
+	-- Ring buffer; old entry tables are reused, so frequent income ticks
+	-- don't create garbage.
+	local function record(player: Player, currency: string, delta: number, reason: string, balance: number)
 		local ledger = ledgers[player]
 		if not ledger then
 			ledger = { entries = {}, nextIndex = 1 }
 			ledgers[player] = ledger
 		end
-		ledger.entries[ledger.nextIndex] = entry
+		local entry = ledger.entries[ledger.nextIndex]
+		if entry then
+			entry.time = os.time()
+			entry.currency = currency
+			entry.delta = delta
+			entry.reason = reason
+			entry.balance = balance
+		else
+			ledger.entries[ledger.nextIndex] = {
+				time = os.time(),
+				currency = currency,
+				delta = delta,
+				reason = reason,
+				balance = balance,
+			}
+		end
 		ledger.nextIndex = ledger.nextIndex % config.LedgerSize + 1
 	end
 
@@ -136,17 +153,11 @@ function EconomyValidator.new(deps: EconomyDeps): EconomyValidator
 		if newBalance > config.MaxBalance then
 			return false, "AboveMaxBalance"
 		end
-		record(player, {
-			time = os.time(),
-			currency = currency,
-			delta = delta,
-			reason = reason,
-			balance = newBalance,
-		})
+		record(player, currency, delta, reason, newBalance)
 		return true, newBalance
 	end
 
-	-- Newest first.
+	-- Newest first, as copies (the ring's tables get reused).
 	local function getLedger(player: Player, count: number?): { LedgerEntry }
 		local result: { LedgerEntry } = {}
 		local ledger = ledgers[player]
@@ -161,7 +172,7 @@ function EconomyValidator.new(deps: EconomyDeps): EconomyValidator
 			if not entry then
 				break
 			end
-			table.insert(result, entry)
+			table.insert(result, table.clone(entry))
 		end
 		return result
 	end

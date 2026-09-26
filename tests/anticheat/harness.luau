@@ -304,6 +304,10 @@ function H.newWorld(options: Options?)
 		water = {},
 		tagged = {},
 		queue = {}, -- fake task scheduler
+		-- Cost counters for bench.luau: engine queries made by the anti-cheat
+		-- and the real time spent in its Heartbeat handler / in the stand-in
+		-- queries (which are slow Luau here, native code in Roblox).
+		stats = { raycasts = 0, overlaps = 0, voxelReads = 0, heartbeatTime = 0, queryTime = 0, frames = 0 },
 		random = newRandom(opts.seed or 7),
 	}
 
@@ -446,6 +450,22 @@ function H.newWorld(options: Options?)
 			end
 		end
 		return voxels(Enum.Material.Air), voxels(0)
+	end
+
+	-- Count and time every query.
+	for _, entry in {
+		{ methods = workspaceMethods, name = "Raycast", counter = "raycasts" },
+		{ methods = workspaceMethods, name = "GetPartBoundsInBox", counter = "overlaps" },
+		{ methods = terrainMethods, name = "ReadVoxels", counter = "voxelReads" },
+	} do
+		local original = entry.methods[entry.name]
+		entry.methods[entry.name] = function(...)
+			sim.stats[entry.counter] += 1
+			local started = os.clock()
+			local a, b = original(...)
+			sim.stats.queryTime += os.clock() - started
+			return a, b
+		end
 	end
 
 	local services = {
@@ -961,7 +981,10 @@ function H.newWorld(options: Options?)
 				end
 			end
 			runDueTasks()
+			local started = os.clock()
 			heartbeat:Fire(FRAME)
+			sim.stats.heartbeatTime += os.clock() - started
+			sim.stats.frames += 1
 		end
 	end
 

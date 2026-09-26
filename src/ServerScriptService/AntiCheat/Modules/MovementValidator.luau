@@ -200,15 +200,36 @@ end
 local MovementValidator = {}
 
 function MovementValidator.robloxWorld(config: any): World
-	local groundParams = RaycastParams.new()
-	groundParams.FilterType = Enum.RaycastFilterType.Exclude
-	groundParams.IgnoreWater = false -- standing on water counts as supported
-	groundParams.RespectCanCollide = true
+	-- Query params per character, built once (and again only if its collision
+	-- group changes) instead of re-filtering on every sample. Weak keys: a
+	-- removed character's params are collected with it.
+	type CharacterParams = { ground: RaycastParams, overlap: OverlapParams, group: string }
+	local paramsByCharacter: { [Model]: CharacterParams } = setmetatable({}, { __mode = "k" }) :: any
 
-	local overlapParams = OverlapParams.new()
-	overlapParams.FilterType = Enum.RaycastFilterType.Exclude
-	overlapParams.RespectCanCollide = true
-	overlapParams.MaxParts = 1
+	local function paramsFor(character: Model, root: BasePart): CharacterParams
+		local group = root.CollisionGroup
+		local params = paramsByCharacter[character]
+		if params and params.group == group then
+			return params
+		end
+		local ground = RaycastParams.new()
+		ground.FilterType = Enum.RaycastFilterType.Exclude
+		ground.FilterDescendantsInstances = { character }
+		ground.CollisionGroup = group
+		ground.IgnoreWater = false -- standing on water counts as supported
+		ground.RespectCanCollide = true
+
+		local overlap = OverlapParams.new()
+		overlap.FilterType = Enum.RaycastFilterType.Exclude
+		overlap.FilterDescendantsInstances = { character }
+		overlap.CollisionGroup = group
+		overlap.RespectCanCollide = true
+		overlap.MaxParts = 1
+
+		local created = { ground = ground, overlap = overlap, group = group }
+		paramsByCharacter[character] = created
+		return created
+	end
 
 	local wallParams = RaycastParams.new()
 	wallParams.FilterType = Enum.RaycastFilterType.Exclude
@@ -247,9 +268,8 @@ function MovementValidator.robloxWorld(config: any): World
 		-- R6 rigs report HipHeight 0 but stand on 2-stud legs.
 		local reach = math.max(humanoid.HipHeight, 2) + root.Size.Y / 2 + config.GroundProbeDepth
 
-		groundParams.FilterDescendantsInstances = { character }
-		groundParams.CollisionGroup = root.CollisionGroup
-		local hit = Workspace:Raycast(position, Vector3.new(0, -reach, 0), groundParams)
+		local params = paramsFor(character, root)
+		local hit = Workspace:Raycast(position, Vector3.new(0, -reach, 0), params.ground)
 		if hit then
 			local part = hit.Instance
 			return true, if part:IsA("BasePart") then part.AssemblyLinearVelocity else nil
@@ -257,12 +277,10 @@ function MovementValidator.robloxWorld(config: any): World
 
 		-- Ledges, ladders, walls and ceilings: anything collidable touching a
 		-- box a little bigger than the character.
-		overlapParams.FilterDescendantsInstances = { character }
-		overlapParams.CollisionGroup = root.CollisionGroup
 		local top = position.Y + 3
 		local bottom = position.Y - reach
 		local center = Vector3.new(position.X, (top + bottom) / 2, position.Z)
-		local touching = Workspace:GetPartBoundsInBox(CFrame.new(center), Vector3.new(5, top - bottom, 5), overlapParams)
+		local touching = Workspace:GetPartBoundsInBox(CFrame.new(center), Vector3.new(5, top - bottom, 5), params.overlap)
 		if #touching > 0 then
 			return true, nil
 		end
@@ -270,26 +288,25 @@ function MovementValidator.robloxWorld(config: any): World
 		return isInWater(position, reach), nil
 	end
 
-	-- Every character, refreshed at most once a second: walking through
-	-- another player isn't noclip.
-	local characters: { Instance } = {}
+	-- Walking through another player isn't noclip, so every character is
+	-- filtered out; the list is rebuilt at most once a second.
 	local charactersAt = -math.huge
-	local function allCharacters(): { Instance }
+	local function refreshCharacterFilter()
 		local t = os.clock()
 		if t - charactersAt >= 1 then
 			charactersAt = t
-			characters = {}
+			local characters = {}
 			for _, player in Players:GetPlayers() do
 				if player.Character then
 					table.insert(characters, player.Character)
 				end
 			end
+			wallParams.FilterDescendantsInstances = characters
 		end
-		return characters
 	end
 
 	local function wallPenetration(from: Vector3, to: Vector3, root: BasePart): number?
-		wallParams.FilterDescendantsInstances = allCharacters()
+		refreshCharacterFilter()
 		wallParams.CollisionGroup = root.CollisionGroup
 
 		local direction = to - from
@@ -843,9 +860,7 @@ function MovementValidator.new(deps: Dependencies): MovementValidator
 			if now >= s.nextSample then
 				-- Keep each player's stagger; skip ahead after a long hitch.
 				s.nextSample = math.max(s.nextSample + config.SampleInterval, now)
-				local ok, err = pcall(function()
-					sample(s, now)
-				end)
+				local ok, err = pcall(sample :: any, s, now)
 				if not ok and now - s.lastError > 30 then
 					s.lastError = now
 					warn(`[AntiCheat] movement sample failed for {s.player.Name}: {err}`)

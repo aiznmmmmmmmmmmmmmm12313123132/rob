@@ -361,6 +361,7 @@ clock.
 lune run tests/anticheat/run                  # everything
 lune run tests/anticheat/run -- --verbose     # print each test's evidence
 lune run tests/anticheat/run -- hoverboard    # tests whose name matches
+lune run tests/anticheat/bench                # cost per player (see Performance)
 ```
 
 It covers 51 tests:
@@ -380,6 +381,55 @@ It covers 51 tests:
 
 A test also fails if any anti-cheat code threw an error it had caught
 itself.
+
+## Performance
+
+**Players' devices: no cost.** Nothing runs on the client in a live game.
+The tester LocalScript exits outside Studio. The anti-cheat adds no remotes
+of its own and sends nothing to clients (one attribute on ReplicatedStorage
+at start-up), so it can't lower anyone's FPS or add network lag.
+
+**Server: one loop, spread out.**
+
+- A single Heartbeat connection covers every player. Each character is
+  sampled 4 times a second, and the players are staggered across frames, so
+  the work arrives as a few samples per frame, never in a spike.
+- A normal sample does one short downward raycast, plus one short wall
+  raycast when the character moved 2+ studs. An overlap query and a
+  terrain-water read happen only when nothing is under the character
+  (mostly mid-jump).
+- There are no Workspace scans, and query filters are built once per
+  character.
+- The common path allocates no tables: a shared default movement profile,
+  a reused ledger ring, and no per-sample closures.
+- Remote checks run only when a remote is called.
+- Setbacks and freezes happen only at levels 3-4, which none of the
+  normal-play tests reach.
+
+Measured with `lune run tests/anticheat/bench` (players walking and
+jumping; add `-- <players> <seconds>` to change it):
+
+| | 40 players | 100 players |
+| --- | --- | --- |
+| Raycasts per player per second | 8 | 7.6 |
+| Overlap / terrain queries per player per second | 0.34 / 0.34 | 0.34 / 0.31 |
+| Anti-cheat Luau per sample | ~31 µs | ~35 µs |
+| Anti-cheat Luau per server frame | ~0.08 ms (0.5% of a 60 fps frame) | ~0.23 ms (1.4%) |
+
+Remote gateway, per call: about 3 µs for a normal 2-argument request, about
+1.5 µs to drop a spammed one, and about 50 µs for a 20-id sell request
+(limited to 2 per second).
+
+These are upper bounds. Lune has no native code generation and treats
+Vector3 as a heap object; in Roblox, Vector3 is a native value and raycasts
+are native code, so a real server should be faster. To check on a live
+server, open the Developer Console (F9) > Scripts and look at the AntiCheat
+Script's activity, or use the MicroProfiler.
+
+If a very full server ever needs it:
+- `Movement.SampleInterval = 0.33` does a quarter less work. The windows are
+  in seconds, so detection only gets slightly slower.
+- `Movement.Noclip.Enabled = false` halves the raycasts.
 
 ## Audit of Anti Cheat System v1.5
 

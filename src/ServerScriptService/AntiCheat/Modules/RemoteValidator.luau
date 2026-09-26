@@ -98,6 +98,9 @@ local RemoteValidator = {}
 local DEFAULT_MAX_STRING = 64
 local DEFAULT_MAX_ARRAY = 100
 
+-- "^pattern$" built once per pattern, not once per value checked.
+local anchoredPatterns: { [string]: string } = {}
+
 function RemoteValidator.isFiniteNumber(value: any): boolean
 	return type(value) == "number" and math.isfinite(value)
 end
@@ -120,8 +123,16 @@ local function validateString(spec: ArgSpec, value: any): (boolean, any)
 	if string.find(value, "%c") then
 		return false, "string has control characters"
 	end
-	if spec.pattern and not string.find(value, "^" .. spec.pattern .. "$") then
-		return false, "string has unexpected characters"
+	local pattern = spec.pattern
+	if pattern then
+		local anchored = anchoredPatterns[pattern]
+		if not anchored then
+			anchored = "^" .. pattern .. "$"
+			anchoredPatterns[pattern] = anchored
+		end
+		if not string.find(value, anchored) then
+			return false, "string has unexpected characters"
+		end
 	end
 	return true, value
 end
