@@ -41,7 +41,10 @@ H.Vector3 = Vector3
 H.CFrame = CFrame
 H.Enum = Enum
 
-local SOURCE_DIR = "src/ServerScriptService/AntiCheat"
+-- The repository layout, or the downloadable package's (Source/...).
+local SOURCE_DIR = if fs.isDir("src/ServerScriptService/AntiCheat")
+	then "src/ServerScriptService/AntiCheat"
+	else "Source/ServerScriptService/AntiCheat"
 local FRAME = 1 / 60
 local REPLICATION_INTERVAL = 1 / 20
 local CHARACTER_ROOT_HEIGHT = 3 -- root centre above the feet (HipHeight 2 + half root)

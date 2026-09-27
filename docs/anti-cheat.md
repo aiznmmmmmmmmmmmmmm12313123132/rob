@@ -44,11 +44,15 @@ are in `tests/anticheat/`.
 
 1. If you installed the free model, delete its two scripts and
    `ReplicatedStorage.AntiCheatEvent`.
-2. Build the hierarchy above in **ServerScriptService** with the same names
-   and classes, and paste each file in. `.server.luau` is a Script; every
-   other `.luau` file is a ModuleScript.
-3. Optional: add the `AntiCheatTester` LocalScript to
-   **StarterPlayerScripts**. It only runs in Studio.
+2. In the Explorer, right-click **ServerScriptService** > **Insert from
+   File...** and pick `AntiCheat.rbxm` from the package (dragging the file onto
+   ServerScriptService works too). This gives the whole hierarchy above.
+   Build the package with `lune run tools/build_anticheat_package`; it
+   writes `dist/CartoonDice_AntiCheat/` and `dist/CartoonDice_AntiCheat.zip`.
+   Without Lune, build the hierarchy by hand and paste each file in:
+   `.server.luau` is a Script, every other `.luau` file is a ModuleScript.
+3. Optional: insert `AntiCheatTester.rbxm` into **StarterPlayer >
+   StarterPlayerScripts** the same way. It only runs in Studio.
 4. In `Config.Permissions`, add your team's UserIds to `DeveloperUserIds` /
    `ModeratorUserIds`. The place owner is a developer automatically.
 5. Move each gameplay remote's handler into `AntiCheat.bindRemote` (see
