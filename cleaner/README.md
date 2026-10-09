@@ -41,7 +41,7 @@ Both editions automatically adapt to the PC they run on:
 | `docs/TECHNICAL_REPORT.md` | Audit of v2.0, research notes with sources, safety matrix, before/after methodology and limitations (deliverables B, C, D, G, H). |
 | `docs/TEST_REPORT.md` | What was tested, how, the results, and what is still unverified (deliverable E). |
 | `tests/Test-AiznmCleaner.ps1` | Test suite. It only works inside a throw-away sandbox folder, so you can run it on your PC. |
-| `CHANGELOG.md` | Version history. |
+| `docs/CHANGELOG.md` | Version history. |
 
 ---
 
