@@ -1,0 +1,231 @@
+@echo off
+setlocal EnableExtensions EnableDelayedExpansion
+title aiznm CLEANER v2.0
+color 0A
+mode con: cols=100 lines=42
+
+:: Check for Administrator privileges
+net session >nul 2>&1
+if not "%errorlevel%"=="0" (
+    cls
+    echo.
+    echo ================================================================
+    echo                         aiznm CLEANER
+    echo ================================================================
+    echo.
+    echo Administrator permissions are required to perform deep system cleanup.
+    echo Requesting elevated privileges...
+    echo.
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
+        "Start-Process -FilePath $env:ComSpec -Verb RunAs -ArgumentList '/k ""%~f0""'"
+    exit /b
+)
+
+:START
+cls
+echo.
+echo ================================================================
+echo                         aiznm CLEANER
+echo                   Storage & System Maintenance
+echo ================================================================
+echo.
+echo Analyzing drive C: and scanning target locations... Please wait.
+echo.
+
+:: Single-pass PowerShell analysis payload for fast execution
+set "SCAN_SCRIPT=$drive = Get-CimInstance Win32_LogicalDisk -Filter ""DeviceID='C:'""; $totalGB = [math]::Round($drive.Size / 1GB, 2); $freeGB = [math]::Round($drive.FreeSpace / 1GB, 2); $usedGB = [math]::Round(($drive.Size - $drive.FreeSpace) / 1GB, 2); function Get-DirSize($p) { if(Test-Path $p){ try { $s = (Get-ChildItem -LiteralPath $p -Force -File -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum; if($s){ return [math]::Round($s / 1MB, 2) } } catch {} } return 0 }; $t_user = Get-DirSize $env:TEMP; $t_sys = Get-DirSize '$env:WINDIR\Temp'; $t_wu = Get-DirSize '$env:WINDIR\SoftwareDistribution\Download'; $t_do = Get-DirSize '$env:ProgramData\Microsoft\Windows\DeliveryOptimization\Cache'; $t_crash = Get-DirSize '$env:LOCALAPPDATA\CrashDumps'; $t_d3d = Get-DirSize '$env:LOCALAPPDATA\D3DSCache'; $t_nv = Get-DirSize '$env:LOCALAPPDATA\NVIDIA\DXCache'; $t_amd = Get-DirSize '$env:LOCALAPPDATA\AMD\DxCache'; $p_thumb = Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Explorer'; $t_thumb = 0; if(Test-Path $p_thumb){ $s = (Get-ChildItem -LiteralPath $p_thumb -Filter 'thumbcache*.db' -File -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum; if($s){ $t_thumb = [math]::Round($s / 1MB, 2) } }; $t_rb = 0; if(Test-Path 'C:\$Recycle.Bin'){ $s = (Get-ChildItem -LiteralPath 'C:\$Recycle.Bin' -Force -File -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum; if($s){ $t_rb = [math]::Round($s / 1MB, 2) } }; function Get-BrowserCache($root, $folders) { $s = 0; if(Test-Path $root){ Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue | ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -Directory -Force -ErrorAction SilentlyContinue | Where-Object Name -in $folders | ForEach-Object { $sub = (Get-ChildItem -LiteralPath $_.FullName -Force -File -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum; if($sub){ $s += $sub } } } }; return [math]::Round($s / 1MB, 2) }; $t_edge = Get-BrowserCache (Join-Path $env:LOCALAPPDATA 'Microsoft\Edge\User Data') @('Cache','Code Cache','GPUCache'); $t_chrome = Get-BrowserCache (Join-Path $env:LOCALAPPDATA 'Google\Chrome\User Data') @('Cache','Code Cache','GPUCache'); $t_ff = Get-BrowserCache (Join-Path $env:LOCALAPPDATA 'Mozilla\Firefox\Profiles') @('cache2','startupCache'); $totMB = [math]::Round($t_user+$t_sys+$t_wu+$t_do+$t_crash+$t_d3d+$t_nv+$t_amd+$t_thumb+$t_rb+$t_edge+$t_chrome+$t_ff, 2); Write-Host ""[DATA]:$totalGB|$usedGB|$freeGB|$t_user|$t_sys|$t_wu|$t_do|$t_crash|$t_thumb|$t_d3d|$t_nv|$t_amd|$t_edge|$t_chrome|$t_ff|$t_rb|$totMB"""
+
+for /f "tokens=2 delims=:" %%A in ('powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "%SCAN_SCRIPT%"') do set "RAW_DATA=%%A"
+
+for /f "tokens=1-17 delims=|" %%a in ("%RAW_DATA%") do (
+    set "DRIVE_TOTAL=%%a"
+    set "DRIVE_USED=%%b"
+    set "DRIVE_FREE=%%c"
+    set "SIZE_TEMP=%%d"
+    set "SIZE_WINTEMP=%%e"
+    set "SIZE_WU=%%f"
+    set "SIZE_DO=%%g"
+    set "SIZE_CRASH=%%h"
+    set "SIZE_THUMB=%%i"
+    set "SIZE_D3D=%%j"
+    set "SIZE_NV=%%k"
+    set "SIZE_AMD=%%l"
+    set "SIZE_EDGE=%%m"
+    set "SIZE_CHROME=%%n"
+    set "SIZE_FF=%%o"
+    set "SIZE_RB=%%p"
+    set "TOTAL_RECLAIMABLE_MB=%%q"
+)
+
+cls
+echo.
+echo ================================================================
+echo                        CLEANUP ANALYSIS
+echo ================================================================
+echo.
+echo C: DRIVE STATUS
+echo ----------------------------------------------------------------
+echo Total Storage  : %DRIVE_TOTAL% GB
+echo Used Storage   : %DRIVE_USED% GB
+echo Free Storage   : %DRIVE_FREE% GB
+echo.
+echo POTENTIALLY RECLAIMABLE JUNK
+echo ----------------------------------------------------------------
+echo User Temp Files         : %SIZE_TEMP% MB
+echo Windows System Temp     : %SIZE_WINTEMP% MB
+echo Windows Update Cache    : %SIZE_WU% MB
+echo Delivery Optimization   : %SIZE_DO% MB
+echo Crash Dumps             : %SIZE_CRASH% MB
+echo Thumbnail Cache         : %SIZE_THUMB% MB
+echo DirectX Shader Cache    : %SIZE_D3D% MB
+echo NVIDIA Shader Cache     : %SIZE_NV% MB
+echo AMD Shader Cache        : %SIZE_AMD% MB
+echo Microsoft Edge Cache    : %SIZE_EDGE% MB
+echo Google Chrome Cache     : %SIZE_CHROME% MB
+echo Firefox Cache           : %SIZE_FF% MB
+echo Recycle Bin             : %SIZE_RB% MB
+echo ----------------------------------------------------------------
+powershell.exe -NoProfile -Command "Write-Host ('TOTAL RECLAIMABLE SPACE : {0:N2} MB ({1:N2} GB)' -f %TOTAL_RECLAIMABLE_MB%, (%TOTAL_RECLAIMABLE_MB%/1024))"
+echo ================================================================
+echo.
+
+choice /C YN /N /M "RUN FULL CLEANUP NOW? [Y/N]: "
+if errorlevel 2 goto CANCEL
+
+:CLEAN
+cls
+echo.
+echo ================================================================
+echo                     FULL CLEAN IN PROGRESS
+echo ================================================================
+echo.
+
+:: Get exact initial free space
+for /f "delims=" %%A in ('powershell.exe -NoProfile -Command "[int64](Get-CimInstance Win32_LogicalDisk -Filter ""DeviceID='C:'"").FreeSpace"') do set "START_BYTES=%%A"
+
+echo [01/13] Cleaning User Temp Files...
+call :CLEAN_FOLDER "%TEMP%"
+
+echo [02/13] Cleaning Windows System Temp...
+call :CLEAN_FOLDER "%WINDIR%\Temp"
+
+echo [03/13] Purging Windows Update Download Cache...
+net stop wuauserv >nul 2>&1
+net stop bits >nul 2>&1
+call :CLEAN_FOLDER "%WINDIR%\SoftwareDistribution\Download"
+net start wuauserv >nul 2>&1
+net start bits >nul 2>&1
+
+echo [04/13] Purging Delivery Optimization Cache...
+call :CLEAN_FOLDER "%ProgramData%\Microsoft\Windows\DeliveryOptimization\Cache"
+
+echo [05/13] Removing Crash Dumps...
+call :CLEAN_FOLDER "%LOCALAPPDATA%\CrashDumps"
+
+echo [06/13] Flushing Thumbnail Cache...
+taskkill /f /im explorer.exe >nul 2>&1
+del /f /q "%LOCALAPPDATA%\Microsoft\Windows\Explorer\thumbcache*.db" >nul 2>&1
+start explorer.exe
+
+echo [07/13] Clearing DirectX Shader Cache...
+call :CLEAN_FOLDER "%LOCALAPPDATA%\D3DSCache"
+
+echo [08/13] Clearing NVIDIA Shader Cache...
+call :CLEAN_FOLDER "%LOCALAPPDATA%\NVIDIA\DXCache"
+
+echo [09/13] Clearing AMD Shader Cache...
+call :CLEAN_FOLDER "%LOCALAPPDATA%\AMD\DxCache"
+
+echo [10/13] Clearing Microsoft Edge Cache...
+taskkill /f /im msedge.exe >nul 2>&1
+call :CLEAN_BROWSERS "%LOCALAPPDATA%\Microsoft\Edge\User Data"
+
+echo [11/13] Clearing Google Chrome Cache...
+taskkill /f /im chrome.exe >nul 2>&1
+call :CLEAN_BROWSERS "%LOCALAPPDATA%\Google\Chrome\User Data"
+
+echo [12/13] Clearing Firefox Cache...
+taskkill /f /im firefox.exe >nul 2>&1
+for /d %%P in ("%LOCALAPPDATA%\Mozilla\Firefox\Profiles\*") do (
+    if exist "%%P\cache2" call :CLEAN_FOLDER "%%P\cache2"
+    if exist "%%P\startupCache" call :CLEAN_FOLDER "%%P\startupCache"
+)
+
+echo [13/13] Emptying Recycle Bin...
+powershell.exe -NoProfile -Command "Clear-RecycleBin -DriveLetter C -Force -ErrorAction SilentlyContinue" >nul 2>&1
+
+echo.
+echo Running Built-in Windows Storage Optimization...
+cleanmgr /autoclean >nul 2>&1
+
+:: Get ending free space and compute exact differential with 64-bit precision
+for /f "delims=" %%A in ('powershell.exe -NoProfile -Command "[int64](Get-CimInstance Win32_LogicalDisk -Filter ""DeviceID='C:'"").FreeSpace"') do set "END_BYTES=%%A"
+
+for /f "tokens=1-3 delims=|" %%A in ('powershell.exe -NoProfile -Command "$s=[int64]%START_BYTES%; $e=[int64]%END_BYTES%; $diff=$e - $s; if($diff -lt 0){$diff=0}; Write-Host ('{0:N2}|{1:N2}|{2:N2}' -f ($s/1GB), ($e/1GB), ($diff/1GB))"') do (
+    set "GB_BEFORE=%%A"
+    set "GB_AFTER=%%B"
+    set "GB_RECOVERED=%%C"
+)
+
+cls
+echo.
+echo ================================================================
+echo                       CLEANUP COMPLETE
+echo ================================================================
+echo.
+echo DRIVE C: STORAGE RESULTS
+echo ----------------------------------------------------------------
+echo Free Space Before Cleanup : %GB_BEFORE% GB
+echo Free Space After Cleanup  : %GB_AFTER% GB
+echo Total Space Recovered     : %GB_RECOVERED% GB
+echo ----------------------------------------------------------------
+echo.
+echo SUMMARY OF COMPLETED ACTIONS
+echo ----------------------------------------------------------------
+echo [OK] Temporary user and system files deleted
+echo [OK] Windows Update and Delivery Optimization caches purged
+echo [OK] System crash dumps and thumbnail caches cleared
+echo [OK] DirectX, NVIDIA, and AMD shader caches reset
+echo [OK] Browser caches (Edge, Chrome, Firefox) emptied
+echo [OK] Windows Recycle Bin permanently emptied
+echo [OK] Silent Windows Storage Cleanup completed
+echo ----------------------------------------------------------------
+echo.
+echo All operations finished successfully.
+echo Press any key to exit...
+pause >nul
+goto EXIT
+
+:CANCEL
+cls
+echo.
+echo ================================================================
+echo                      CLEANUP CANCELLED
+echo ================================================================
+echo.
+echo No files were modified or deleted.
+echo Press any key to exit...
+pause >nul
+goto EXIT
+
+:: Subroutines
+:CLEAN_FOLDER
+if exist "%~1" (
+    del /f /s /q "%~1\*" >nul 2>&1
+    for /d %%D in ("%~1\*") do rd /s /q "%%D" >nul 2>&1
+)
+exit /b
+
+:CLEAN_BROWSERS
+if exist "%~1" (
+    for /d %%P in ("%~1\*") do (
+        if exist "%%P\Cache" call :CLEAN_FOLDER "%%P\Cache"
+        if exist "%%P\Code Cache" call :CLEAN_FOLDER "%%P\Code Cache"
+        if exist "%%P\GPUCache" call :CLEAN_FOLDER "%%P\GPUCache"
+    )
+)
+exit /b
+
+:EXIT
+endlocal
+exit /b

@@ -1,0 +1,3 @@
+# Keep Windows line endings exactly as committed (batch files need CRLF).
+*.bat -text
+*.bat.txt -text
