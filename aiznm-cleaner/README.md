@@ -8,7 +8,7 @@ PowerShell 5.1.
 
 ## Two editions
 
-| | `aiznm_CLEANER.bat` (Personal) | `aiznm_CLEANER_Universal.bat` (Universal) |
+| | `Download/aiznm_CLEANER_Personal.bat` (Personal) | `Download/aiznm_CLEANER_Universal.bat` (Universal) |
 |---|---|---|
 | Made for | One documented PC (i9-10900F / PRIME B560-PLUS / RTX 4060, Windows 10 Home 22H2) | **Any** Windows 10 or Windows 11 PC, any hardware, desktop or laptop |
 | System overview | Compares what Windows detects with that PC's documented baseline (Matches / Differs) | Shows the detected hardware with neutral hints: memory below its module rating, monitor below its best refresh rate, BIOS and driver age, battery |
@@ -34,8 +34,8 @@ Both editions automatically adapt to the PC they run on:
 
 | File | What it is |
 |---|---|
-| `aiznm_CLEANER.bat` | **Personal edition.** Double-click to run. |
-| `aiznm_CLEANER_Universal.bat` | **Universal edition** for any Windows 10/11 PC. Double-click to run. |
+| `Download/aiznm_CLEANER_Personal.bat` | **Personal edition.** Double-click to run. |
+| `Download/aiznm_CLEANER_Universal.bat` | **Universal edition** for any Windows 10/11 PC. Double-click to run. |
 | `src/` | The shared source both `.bat` files are built from, plus `Build-AiznmCleaner.ps1`. You only need this to change the program. |
 | `backup/aiznm CLEANER v2.0 (original, backed up 2026-10-09).bat.txt` | Your original v2.0 script, unchanged. The extra `.txt` stops it being run by accident. |
 | `docs/TECHNICAL_REPORT.md` | Audit of v2.0, research notes with sources, safety matrix, before/after methodology and limitations (deliverables B, C, D, G, H). |
@@ -49,7 +49,7 @@ Both editions automatically adapt to the PC they run on:
 
 ### 1. Running it
 
-1. Put `aiznm_CLEANER.bat` in any folder. Spaces and unusual characters in
+1. Put `Download/aiznm_CLEANER_Personal.bat` in any folder. Spaces and unusual characters in
    the folder name are fine.
 2. Double-click it. **Do not** use "Run as administrator". The program asks
    for administrator rights itself, only when a task you choose really needs
@@ -181,7 +181,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-AiznmCleaner.ps
 ```
 
 Test the Universal edition by adding
-`-BatPath .\aiznm_CLEANER_Universal.bat` to the end of that command.
+`-BatPath .\Download\aiznm_CLEANER_Universal.bat` to the end of that command.
 
 On Windows it also runs the two Windows-only tests: the verified-delete
 helper, real file locks, junctions and hard links, and the real folder

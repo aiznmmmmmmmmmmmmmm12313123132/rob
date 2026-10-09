@@ -21,7 +21,7 @@
     powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-AiznmCleaner.ps1
 #>
 param(
-    [string]$BatPath = (Join-Path (Split-Path -Parent $PSScriptRoot) 'aiznm_CLEANER.bat'),
+    [string]$BatPath = (Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'Download') 'aiznm_CLEANER_Personal.bat'),
     [switch]$KeepSandbox
 )
 
@@ -1070,7 +1070,7 @@ Invoke-TestCase 'T49' 'Riot products are detected generically and read-only' {
 }
 
 Invoke-TestCase 'T50' 'The BAT under test is exactly what src\Build-AiznmCleaner.ps1 produces (no drift between editions)' {
-    $build = Join-Path (Join-Path (Split-Path -Parent $BatPath) 'src') 'Build-AiznmCleaner.ps1'
+    $build = Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $BatPath)) 'src') 'Build-AiznmCleaner.ps1'
     if (-not [IO.File]::Exists($build)) { return 'SKIP: src folder not present next to the BAT' }
     $out = Join-Path $sandbox 'rebuild'
     [void][IO.Directory]::CreateDirectory($out)

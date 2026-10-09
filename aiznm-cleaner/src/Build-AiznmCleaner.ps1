@@ -3,8 +3,8 @@
     Builds the two self-contained BAT files from these source parts.
 
 .DESCRIPTION
-    aiznm_CLEANER.bat (Personal edition) and aiznm_CLEANER_Universal.bat are
-    generated from the same code. Edit the parts in this folder, then run:
+    Download\aiznm_CLEANER_Personal.bat and Download\aiznm_CLEANER_Universal.bat
+    are generated from the same code. Edit the parts in this folder, then run:
 
         powershell -NoProfile -ExecutionPolicy Bypass -File .\src\Build-AiznmCleaner.ps1
 
@@ -13,11 +13,11 @@
 #>
 param(
     [ValidateSet('all', 'personal', 'universal')][string]$Edition = 'all',
-    [string]$OutDir = (Split-Path -Parent $PSScriptRoot)
+    [string]$OutDir = (Join-Path (Split-Path -Parent $PSScriptRoot) 'Download')
 )
 $ErrorActionPreference = 'Stop'
 $editions = @{
-    personal  = @{ File = 'aiznm_CLEANER.bat'; TITLE = 'aiznm CLEANER'; TARGET = 'Personal edition for one documented Windows 10 Home 22H2 PC, Windows PowerShell 5.1' }
+    personal  = @{ File = 'aiznm_CLEANER_Personal.bat'; TITLE = 'aiznm CLEANER'; TARGET = 'Personal edition for one documented Windows 10 Home 22H2 PC, Windows PowerShell 5.1' }
     universal = @{ File = 'aiznm_CLEANER_Universal.bat'; TITLE = 'aiznm CLEANER Universal'; TARGET = 'Universal edition for any Windows 10 or 11 PC, Windows PowerShell 5.1 (built in)' }
 }
 $parts = @('00-launcher.cmd.template', '01-core.ps1', '02-edition-{0}.ps1', '03-env.ps1', '04-engine.ps1', '05-categories.ps1', '06-flows.ps1', '07-info.ps1')
@@ -37,6 +37,7 @@ foreach ($e in $names) {
     if ($text -match '[^\x09\x0A\x20-\x7E]') { throw "Non-ASCII character found while building $($meta.File). Batch files must stay plain ASCII." }
     if ($text.IndexOf('{{') -ge 0 -and $text.IndexOf('{{') -lt $text.IndexOf('##AIZNM_PS_BEGIN##')) { throw 'A launcher placeholder was not replaced.' }
     $out = Join-Path $OutDir $meta.File
+    if (-not [IO.Directory]::Exists($OutDir)) { [void][IO.Directory]::CreateDirectory($OutDir) }
     [IO.File]::WriteAllBytes($out, [Text.Encoding]::ASCII.GetBytes($text.Replace("`n", "`r`n")))
     Write-Host ('Built {0} ({1:N0} bytes)' -f $out, (Get-Item -LiteralPath $out).Length)
 }

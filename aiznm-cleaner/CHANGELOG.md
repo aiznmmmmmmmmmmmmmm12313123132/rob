@@ -2,7 +2,7 @@
 
 ## 3.1.0 — 2026-10-09
 
-### New: Universal edition (`aiznm_CLEANER_Universal.bat`)
+### New: Universal edition (`Download/aiznm_CLEANER_Universal.bat`)
 - Works on any Windows 10 or Windows 11 PC. Its System overview shows detected hardware with neutral hints in place of a personal baseline: memory below its module rating, monitor below its best refresh rate, BIOS and driver age, and battery on laptops.
 - The Personal and Universal editions are built from one shared source (`src/`) by `src/Build-AiznmCleaner.ps1`, so fixes always reach both. Test T50 checks that the shipped files match the source.
 

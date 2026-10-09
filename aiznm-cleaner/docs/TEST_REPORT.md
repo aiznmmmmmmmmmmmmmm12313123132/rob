@@ -15,7 +15,7 @@ Run it yourself on Windows (recommended). It only touches its own sandbox:
 
 ```
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-AiznmCleaner.ps1
-powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-AiznmCleaner.ps1 -BatPath .\aiznm_CLEANER_Universal.bat
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-AiznmCleaner.ps1 -BatPath .\Download\aiznm_CLEANER_Universal.bat
 ```
 
 The same suite runs against **both editions**.
@@ -24,8 +24,8 @@ The same suite runs against **both editions**.
 
 | Edition | Result |
 |---|---|
-| Personal (`aiznm_CLEANER.bat`) | **48 passed, 0 failed, 2 skipped** |
-| Universal (`aiznm_CLEANER_Universal.bat`) | **48 passed, 0 failed, 2 skipped** |
+| Personal (`Download/aiznm_CLEANER_Personal.bat`) | **48 passed, 0 failed, 2 skipped** |
+| Universal (`Download/aiznm_CLEANER_Universal.bat`) | **48 passed, 0 failed, 2 skipped** |
 
 The two skipped tests (T36, T37) need Windows APIs.
 

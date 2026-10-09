@@ -70,7 +70,7 @@ The whole of `aiznm CLEANER v2.0.bat` was read. It is preserved unchanged in
 ## Architecture
 
 ```
-aiznm_CLEANER.bat
+Download/aiznm_CLEANER_Personal.bat and Download/aiznm_CLEANER_Universal.bat
  |- CMD launcher (about 70 lines)
  |    sets AIZNM_SELF=%~f0, finds 64-bit Windows PowerShell 5.1 by absolute path,
  |    runs a short bootstrap that reads THIS file and executes the text after
@@ -104,7 +104,7 @@ only (Process scope). It doesn't change any system setting. It is needed
 because Windows 10's default *Restricted* policy blocks `.psm1` module
 files [C6], including Windows' own DeliveryOptimization module.
 
-**Elevation flow.** The normal window starts `aiznm_CLEANER.bat` again with
+**Elevation flow.** The normal window starts `Download/aiznm_CLEANER_Personal.bat` again with
 `Start-Process -Verb RunAs`, which shows the standard UAC prompt. It passes
 `--elevated <scan|clean> "<Id+Id>" "<result.json>"`. Ids are joined with `+`
 because CMD splits arguments at commas, semicolons and `=` (a bug found and
@@ -118,7 +118,7 @@ cancelled) is reported as *Cancelled*. Any other failure is reported as
 
 ## Editions: Personal and Universal
 
-| Aspect | Personal (`aiznm_CLEANER.bat`) | Universal (`aiznm_CLEANER_Universal.bat`) |
+| Aspect | Personal (`Download/aiznm_CLEANER_Personal.bat`) | Universal (`Download/aiznm_CLEANER_Universal.bat`) |
 |---|---|---|
 | Edition profile | `$script:Baseline` holds the documented hardware of one PC | `$script:Baseline = $null` |
 | System overview, hardware | "documented baseline vs detected" (Matches / Differs / Not detected, including an XMP-off check against the documented DDR4-3600) | "as Windows reports it", with neutral hints: memory configured below its module rating (XMP/EXPO/DOCP may be off; never changed), BIOS age, GPU driver age, Secure Boot, battery |
