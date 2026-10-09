@@ -1,4 +1,4 @@
-# aiznm CLEANER 3.0.0 — Test report (deliverable E)
+# aiznm CLEANER 3.1.0 — Test report (deliverable E)
 
 ## Where and how it was tested
 
@@ -15,11 +15,19 @@ Run it yourself on Windows (recommended). It only touches its own sandbox:
 
 ```
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-AiznmCleaner.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-AiznmCleaner.ps1 -BatPath .\aiznm_CLEANER_Universal.bat
 ```
+
+The same suite runs against **both editions**.
 
 ## Results
 
-**42 passed, 0 failed, 2 skipped.** The two skipped tests need Windows APIs.
+| Edition | Result |
+|---|---|
+| Personal (`aiznm_CLEANER.bat`) | **48 passed, 0 failed, 2 skipped** |
+| Universal (`aiznm_CLEANER_Universal.bat`) | **48 passed, 0 failed, 2 skipped** |
+
+The two skipped tests (T36, T37) need Windows APIs.
 
 | Id | Test | Result |
 |---|---|---|
@@ -67,11 +75,17 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-AiznmCleaner.ps
 | T42 | Recycle Bin is dropped unless exactly `EMPTY` is typed (`''`, `empty`, `EMPTY `, `yes`, Esc all refused) | PASS |
 | T43 | Unknown and partial sizes are shown as "unknown" or ">=", never as 0 | PASS |
 | T44 | Report states honestly when free space went down; nothing claimed as "recovered" | PASS |
+| T45 | Edition profile:<ul><li>Personal: 7 baseline rows match the documented PC, and the XMP-off check works.</li><li>Universal: no baseline; generic hardware rows; an XMP kit running above its JEDEC rating isn't flagged, while memory below its rating is.</li><li>Both: empty hardware facts still render; Windows support text for 10/11/other; health-check flags (uptime, memory, pending restart).</li></ul> | PASS (both) |
+| T46 | Vivaldi (per profile), Opera and Opera GX (Local `Cache` only): only cache deleted; cookies, `Local State` and other files kept; running `opera.exe` skips the category | PASS |
+| T47 | Selection screen: one keyed row per applicable category, not-applicable ones named on one line, every line within 100 columns | PASS |
+| T48 | Shader caches follow the detected vendor: NVIDIA LocalLow per-driver folder cleaned; Intel left alone on an NVIDIA-only PC; Intel (Local + LocalLow) and AMD (DxcCache + GLCache) cleaned when those adapters exist | PASS |
+| T49 | Riot products detected generically: League of Legends confirmed; VALORANT without game files only "possible" | PASS |
+| T50 | The tested `.bat` is byte-for-byte what `src/Build-AiznmCleaner.ps1` produces (no drift between editions) | PASS (both) |
 
 Other checks:
 
-* **PSScriptAnalyzer compatibility (5.1 / Windows 10).** No syntax or .NET
-  type problems. One command was flagged: `Delete-DeliveryOptimizationCache`
+* **PSScriptAnalyzer compatibility (5.1 / Windows 10)**, run on both
+  editions. No syntax or .NET type problems. One command was flagged: `Delete-DeliveryOptimizationCache`
   is not in the 1809 profile. It is checked at run time; if missing, the
   category shows "Not applicable".
 * **C# helper.** Compiles at C# 5. Marshalled sizes match the SDK:
@@ -88,6 +102,16 @@ Other checks:
   Windows tools.
 
 ## Bugs found by this testing, and fixed before delivery
+
+3.1.0 round:
+* A new `'Windows 11 ' + $Os.Version + '...', 'Gray'` line had the same
+  comma-versus-`+` trap. The syntax-tree check (T38) caught it automatically
+  before any run.
+* The new "categories that apply" filter made the old row-count test
+  ambiguous. The tests now match only category rows; the program was
+  correct.
+
+3.0.0 round:
 
 | Bug | Effect if shipped | Found by |
 |---|---|---|

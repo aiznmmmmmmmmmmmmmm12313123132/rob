@@ -1,5 +1,25 @@
 # Change log
 
+## 3.1.0 — 2026-10-09
+
+### New: Universal edition (`aiznm_CLEANER_Universal.bat`)
+- Works on any Windows 10 or Windows 11 PC. Its System overview shows detected hardware with neutral hints in place of a personal baseline: memory below its module rating, monitor below its best refresh rate, BIOS and driver age, and battery on laptops.
+- The Personal and Universal editions are built from one shared source (`src/`) by `src/Build-AiznmCleaner.ps1`, so fixes always reach both. Test T50 checks that the shipped files match the source.
+
+### Both editions
+- Shader caches:
+  - AMD (`DxCache`, `DxcCache`, `GLCache`) and Intel (`ShaderCache`, Local and LocalLow) are offered only when that graphics vendor is detected.
+  - NVIDIA's newer `LocalLow\NVIDIA\PerDriverVersion` cache folders were added.
+- New browsers: Vivaldi (each profile), plus Opera and Opera GX. For Opera, only the `Cache` folder in Local is cleaned; the profile under Roaming is never touched.
+- A read-only health check in System overview: free space, memory in use, uptime and the Fast Startup note, pending restart, number of startup programs, and power plan.
+- Inventory additions:
+  - Programs that start with Windows are listed. Nothing is changed.
+  - All Riot games are detected from Riot's metadata.
+  - More background apps are recognised: RGB and peripheral tools, cloud sync, AMD and Intel graphics software.
+- Windows 11: a "Cleanup recommendations" shortcut in Windows cleanup tools, and correct Windows 11 naming.
+- Selection screens show only categories that apply to this PC; the rest are named on one line.
+- Tables adapt to narrow windows, and the window grows to 42 lines when the screen allows.
+
 ## 3.0.0 — 2026-10-09
 
 A complete rewrite of `aiznm CLEANER v2.0.bat`. The original is kept unchanged in

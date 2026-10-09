@@ -1,10 +1,29 @@
-# aiznm CLEANER 3.0.0
+# aiznm CLEANER 3.1.0
 
-A safe, transparent storage-maintenance tool for **Windows 10 Home 22H2**. It
-shows you what it is going to delete before it deletes anything, and it
-measures free space before and after so you can see what actually changed.
-It is a single `.bat` file and uses only what ships with Windows: CMD and
-Windows PowerShell 5.1.
+A safe, transparent storage-maintenance tool for Windows. It shows you what
+it is going to delete before it deletes anything, and it measures free space
+before and after so you can see what actually changed. Each edition is a
+single `.bat` file and uses only what ships with Windows: CMD and Windows
+PowerShell 5.1.
+
+## Two editions
+
+| | `aiznm_CLEANER.bat` (Personal) | `aiznm_CLEANER_Universal.bat` (Universal) |
+|---|---|---|
+| Made for | One documented PC (i9-10900F / PRIME B560-PLUS / RTX 4060, Windows 10 Home 22H2) | **Any** Windows 10 or Windows 11 PC, any hardware, desktop or laptop |
+| System overview | Compares what Windows detects with that PC's documented baseline (Matches / Differs) | Shows the detected hardware with neutral hints: memory below its module rating, monitor below its best refresh rate, BIOS and driver age, battery |
+| Cleanup, safety rules, UI, logs | Identical | Identical |
+
+Both editions share the same code, so a fix in one is a fix in both. On a
+PC that isn't yours, use the Universal edition.
+
+Both editions automatically adapt to the PC they run on:
+* **Graphics:** NVIDIA, AMD and Intel shader caches are only offered when that kind of graphics card is actually present.
+* **Browsers:** Edge, Chrome, Brave, Vivaldi, Opera, Opera GX and Firefox are found per profile.
+* **Games:** Steam, Epic and Riot games are found from the launchers' own records.
+* **Windows 11:** gets its extra "Cleanup recommendations" shortcut.
+* **Laptops:** battery level is shown.
+* **Small windows:** tables shrink so nothing wraps.
 
 > **This is not an FPS booster.** Deleting caches and temporary files frees
 > disk space. It does not make VALORANT, or any other game, run at a higher
@@ -15,7 +34,9 @@ Windows PowerShell 5.1.
 
 | File | What it is |
 |---|---|
-| `aiznm_CLEANER.bat` | **The program** (deliverable A). Double-click to run. |
+| `aiznm_CLEANER.bat` | **Personal edition.** Double-click to run. |
+| `aiznm_CLEANER_Universal.bat` | **Universal edition** for any Windows 10/11 PC. Double-click to run. |
+| `src/` | The shared source both `.bat` files are built from, plus `Build-AiznmCleaner.ps1`. You only need this to change the program. |
 | `backup/aiznm CLEANER v2.0 (original, backed up 2026-10-09).bat.txt` | Your original v2.0 script, unchanged. The extra `.txt` stops it being run by accident. |
 | `docs/TECHNICAL_REPORT.md` | Audit of v2.0, research notes with sources, safety matrix, before/after methodology and limitations (deliverables B, C, D, G, H). |
 | `docs/TEST_REPORT.md` | What was tested, how, the results, and what is still unverified (deliverable E). |
@@ -55,14 +76,14 @@ Every screen works with single key presses:
 
 | Key | Item | Changes anything? |
 |---|---|---|
-| 1 | **System overview**: Windows version, hardware compared with your documented baseline, current refresh rate of each monitor, drives | No (read-only) |
+| 1 | **System overview**: Windows version and support status; hardware (compared with your baseline in the Personal edition); current refresh rate of each monitor; a **health check** (free space, memory in use, uptime, pending restart, startup-program count, power plan); drives | No (read-only) |
 | 2 | **Scan for cleanup candidates**: measures every category under the safety rules | No (read-only) |
 | 3 | **Preview and select cleanup**: all categories, with low-risk defaults preselected | Only after you confirm |
 | 4 | **Quick safe cleanup**: old temporary files only (yours, plus Windows Temp) | Only after you confirm |
-| 5 | **Browser cache cleanup**: Edge / Chrome / Brave / Firefox cache folders | Only after you confirm |
+| 5 | **Browser cache cleanup**: Edge, Chrome, Brave, Vivaldi, Opera, Opera GX and Firefox cache folders | Only after you confirm |
 | 6 | **Advanced cleanup**: shader caches, old crash dumps / error reports, Recycle Bin | Only after you confirm |
 | 7 | **Windows cleanup tools**: opens Disk Cleanup, Storage settings or Storage Sense | Windows' own tools |
-| 8 | **Gaming and storage inventory**: Steam libraries and games, VALORANT / Riot, Epic, launchers, browsers, GPU driver, Resizable BAR (via NVIDIA's own `nvidia-smi`), drives, background processes | No (read-only) |
+| 8 | **Gaming and storage inventory**: Steam libraries and games, Riot games (VALORANT, League of Legends), Epic, launchers, browsers, GPU driver, Resizable BAR (via NVIDIA's own `nvidia-smi`), drives, background processes, programs that start with Windows | No (read-only) |
 | 9 | **Reports and logs**: view earlier reports, open the log folder | No |
 | 0 | Exit | |
 
@@ -79,7 +100,7 @@ see a table like this:
   [F]  [ ]  Google Chrome cache                 120 MB      1 -     Low    OPEN - will be skipped
 ```
 
-* Press a **letter** to select or unselect that category. Categories marked `-` don't apply to this PC.
+* Press a **letter** to select or unselect that category. Categories that don't apply to this PC (for example, a browser that isn't installed) are listed on one line under the table instead of taking up rows.
 * **`?`** then a letter shows the full explanation: what it removes, why,
   side effects, whether it regenerates, what to close first, whether it
   needs admin, the exact folders and their sizes.
@@ -159,7 +180,20 @@ it. Your real files and folders are never used.
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-AiznmCleaner.ps1
 ```
 
+Test the Universal edition by adding
+`-BatPath .\aiznm_CLEANER_Universal.bat` to the end of that command.
+
 On Windows it also runs the two Windows-only tests: the verified-delete
 helper, real file locks, junctions and hard links, and the real folder
 checks. Please share the result. Those two tests could not be run where this
 version was built.
+
+### 11. Changing the program (optional)
+
+Edit the files in `src/`, then rebuild both editions:
+
+```
+powershell -NoProfile -ExecutionPolicy Bypass -File .\src\Build-AiznmCleaner.ps1
+```
+
+Test T50 fails if a `.bat` file no longer matches what `src/` produces.

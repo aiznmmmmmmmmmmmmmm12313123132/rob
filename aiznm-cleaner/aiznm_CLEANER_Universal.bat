@@ -1,8 +1,8 @@
 @echo off
 setlocal EnableExtensions DisableDelayedExpansion
 rem ===========================================================================
-rem  aiznm CLEANER 3.1.0  -  safe, transparent storage maintenance
-rem  Personal edition for one documented Windows 10 Home 22H2 PC, Windows PowerShell 5.1
+rem  aiznm CLEANER Universal 3.1.0  -  safe, transparent storage maintenance
+rem  Universal edition for any Windows 10 or 11 PC, Windows PowerShell 5.1 (built in)
 rem
 rem  HOW THIS FILE IS BUILT
 rem    Part 1 (this short CMD section) only starts Windows PowerShell 5.1.
@@ -38,7 +38,7 @@ rem                       caches, dumps and Recycle Bin made opt-in only.
 rem    2.0    (original)  Single elevated "clean everything" script.
 rem ===========================================================================
 
-title aiznm CLEANER
+title aiznm CLEANER Universal
 set "AIZNM_SELF=%~f0"
 set "AIZNM_MODE=interactive"
 set "AIZNM_ELEV_ACTION="
@@ -50,7 +50,7 @@ set "AIZNM_MODE=elevated"
 set "AIZNM_ELEV_ACTION=%~2"
 set "AIZNM_ELEV_TASKS=%~3"
 set "AIZNM_ELEV_RESULT=%~4"
-title aiznm CLEANER - administrator task
+title aiznm CLEANER Universal - administrator task
 
 :aiznm_run
 rem Always use the 64-bit Windows PowerShell 5.1 by absolute path.
@@ -418,24 +418,14 @@ function Restore-Console {
 }
 
 # -----------------------------------------------------------------------------
-# Edition profile: PERSONAL. Built for one specific PC. The documented
-# baseline below is only compared with what Windows reports in System
-# overview; it never changes what is cleaned.
+# Edition profile: UNIVERSAL. Works on any Windows 10 or Windows 11 PC.
+# Hardware, graphics vendor, browsers and games are all detected at run
+# time; nothing about a particular PC is assumed.
 # -----------------------------------------------------------------------------
-$script:Edition      = 'Personal'
-$script:EditionTitle = 'aiznm CLEANER'
-$script:EditionTag   = ''
-$script:Baseline = @{
-    CpuText = 'Intel Core i9-10900F, 10C/20T'; CpuMatch = '10900F'; Cores = 10; Threads = 20
-    BoardText = 'ASUS PRIME B560-PLUS'; BoardMatch = 'B560-PLUS'
-    BiosText = '2001 (2023-02-01)'; BiosVersion = '2001'
-    MemText = '16 GB (2x8) CMK16GX4M2Z3600C18, DDR4-3600'; MemTotal = 16GB; MemSticks = 2; MemPart = 'CMK16GX4M2Z3600C18'; MemSpeed = 3600
-    GpuText = 'MSI GeForce RTX 4060, 8 GB'; GpuMatch = 'RTX 4060'
-    OsText = 'Windows 10 Home 22H2, build 19045.6466'; OsBuild = '19045'; OsUbr = 6466
-    SecureBoot = $true
-    DisplaysNote = 'Documented: AOC Q27G4SDR 2560x1440 up to 360 Hz; Samsung F24G3xTF 1920x1080 (120/144 Hz unconfirmed).'
-    PlatformNote = 'The B560 + i9-10900F platform provides PCIe 3.0.'
-}
+$script:Edition      = 'Universal'
+$script:EditionTitle = 'aiznm CLEANER Universal'
+$script:EditionTag   = 'UNIVERSAL'
+$script:Baseline     = $null
 
 # -----------------------------------------------------------------------------
 # 2a. Trusted folder anchors

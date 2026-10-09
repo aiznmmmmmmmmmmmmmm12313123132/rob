@@ -1,0 +1,76 @@
+@echo off
+setlocal EnableExtensions DisableDelayedExpansion
+rem ===========================================================================
+rem  {{TITLE}} 3.1.0  -  safe, transparent storage maintenance
+rem  {{TARGET}}
+rem
+rem  HOW THIS FILE IS BUILT
+rem    Part 1 (this short CMD section) only starts Windows PowerShell 5.1.
+rem    Part 2 (everything after the PS_BEGIN marker line further down) is a
+rem    normal PowerShell program. PowerShell reads this same file, takes the
+rem    text after the marker and runs it. CMD never parses Part 2, because
+rem    Part 1 always ends with "exit /b" before CMD reaches it.
+rem
+rem    Nothing is downloaded, no files are extracted, and no system settings
+rem    are changed. "-ExecutionPolicy Bypass" applies to this one PowerShell
+rem    process only (Process scope); it is needed because Windows 10's default
+rem    "Restricted" policy blocks Windows' own DeliveryOptimization module.
+rem
+rem  ADMINISTRATOR RIGHTS
+rem    The menu, scans, reports and inventory run as a normal user. Only when
+rem    you confirm a cleanup that includes an administrator-only category does
+rem    the program ask Windows (UAC) to start a second, visible copy of this
+rem    file with three arguments after --elevated: the action (scan or
+rem    clean), the category ids joined with "+" (CMD splits arguments at
+rem    commas) and the result-file path, each quoted where needed.
+rem
+rem  CHANGE LOG
+rem    3.1.0  2026-10-09  Personal and Universal editions from one code base.
+rem                       AMD, Intel and newer NVIDIA shader-cache folders,
+rem                       Vivaldi, Opera and Opera GX caches, Windows 11,
+rem                       read-only health check and startup-program list,
+rem                       compact selection screens.
+rem    3.0.0  2026-10-09  Complete rewrite of v2.0. Least privilege, preview
+rem                       before deletion, measured before/after free space,
+rem                       per-category results, logs, no forced closing of
+rem                       browsers or Explorer, no service stop/start, shader
+rem                       caches, dumps and Recycle Bin made opt-in only.
+rem    2.0    (original)  Single elevated "clean everything" script.
+rem ===========================================================================
+
+title {{TITLE}}
+set "AIZNM_SELF=%~f0"
+set "AIZNM_MODE=interactive"
+set "AIZNM_ELEV_ACTION="
+set "AIZNM_ELEV_TASKS="
+set "AIZNM_ELEV_RESULT="
+
+if /i not "%~1"=="--elevated" goto :aiznm_run
+set "AIZNM_MODE=elevated"
+set "AIZNM_ELEV_ACTION=%~2"
+set "AIZNM_ELEV_TASKS=%~3"
+set "AIZNM_ELEV_RESULT=%~4"
+title {{TITLE}} - administrator task
+
+:aiznm_run
+rem Always use the 64-bit Windows PowerShell 5.1 by absolute path.
+set "AIZNM_PS=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
+if exist "%SystemRoot%\Sysnative\WindowsPowerShell\v1.0\powershell.exe" set "AIZNM_PS=%SystemRoot%\Sysnative\WindowsPowerShell\v1.0\powershell.exe"
+if exist "%AIZNM_PS%" goto :aiznm_start
+echo.
+echo  aiznm CLEANER could not find Windows PowerShell 5.1 at:
+echo    %AIZNM_PS%
+echo  Windows PowerShell is part of Windows 10. Nothing was changed.
+echo.
+pause
+endlocal & exit /b 9009
+
+:aiznm_start
+"%AIZNM_PS%" -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; try { $t=[IO.File]::ReadAllText($env:AIZNM_SELF); $m='#'+'#AIZNM_PS_BEGIN##'; $i=$t.IndexOf($m); if ($i -lt 0) { throw 'The PowerShell section of this file is missing or damaged.' }; $global:AIZNM_EXIT=1; . ([ScriptBlock]::Create($t.Substring($i))); exit [int]$global:AIZNM_EXIT } catch { Write-Host ''; Write-Host (' aiznm CLEANER could not start: ' + $_.Exception.Message) -ForegroundColor Red; Write-Host ' Nothing was changed.'; exit 70 }"
+set "AIZNM_RC=%ERRORLEVEL%"
+if /i "%AIZNM_MODE%"=="interactive" if not "%AIZNM_RC%"=="0" (
+    echo.
+    echo  aiznm CLEANER ended with exit code %AIZNM_RC%. See the message above.
+    pause
+)
+endlocal & exit /b %AIZNM_RC%

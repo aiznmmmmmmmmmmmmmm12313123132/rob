@@ -721,7 +721,7 @@ Invoke-TestCase 'T34' 'Tables and detail views render within the layout width' {
         $cur += $txt
         if (-not $noNl) { $lines += $cur; $cur = '' }
     }
-    $rows = @($lines | Where-Object { $_ -match '^\s+\[[A-Q]\]' })
+    $rows = @($lines | Where-Object { $_ -match '^\s+\[[A-Z]\]\s+(\[[ x]\]|-)' })
     Assert-Equal $cats.Count $rows.Count 'one row per category'
     foreach ($l in $lines) { Assert-That ($l.TrimEnd().Length -le 100) ("line too wide ({0}): {1}" -f $l.Length, $l) }
     foreach ($c in $cats) { $null = Get-CategoryDetailLines $c $results[$c.Id] }
@@ -936,6 +936,150 @@ Invoke-TestCase 'T44' 'Report states honestly when free space went DOWN during c
     Assert-That ($log -match 'measured change -1073741824 bytes') 'negative change logged as negative'
     Assert-That ($log -match 'went DOWN') 'explanation given'
     Assert-That ($log -notmatch 'recovered') 'no claim of recovered space'
+}
+
+function Get-RenderedLines {
+    # Runs a block with the UI switched on and returns the text lines it wrote.
+    param([scriptblock]$Block)
+    $script:QuietUi = $false
+    try { $records = & $Block 6>&1 } finally { $script:QuietUi = $true }
+    $lines = @(); $cur = ''
+    foreach ($rec in $records) {
+        $md = $rec.MessageData
+        $txt = [string]$md
+        $noNl = $false
+        if ($md -and $md.PSObject.Properties['NoNewLine']) { $noNl = [bool]$md.NoNewLine; $txt = [string]$md.Message }
+        $cur += $txt
+        if (-not $noNl) { $lines += $cur; $cur = '' }
+    }
+    return $lines
+}
+
+Invoke-TestCase 'T45' 'Edition profile: personal baseline vs universal detected-hardware view' {
+    Assert-That ($script:Edition -eq 'Personal' -or $script:Edition -eq 'Universal') 'edition set'
+    $facts = @{ CpuName = 'Intel(R) Core(TM) i9-10900F CPU @ 2.80GHz'; Cores = 10; Threads = 20; BaseMHz = 2808; BoardMaker = 'ASUSTeK COMPUTER INC.'; Board = 'PRIME B560-PLUS'
+                BiosVersion = '2001'; BiosDate = [DateTime]'2023-02-01'; MemTotal = [long]16GB; MemSticks = 2; MemParts = @('CMK16GX4M2Z3600C18'); MemRated = 2133; MemConfigured = 3600
+                Gpus = @($script:GpuCache); Displays = @(); SecureBoot = 1; PowerPlan = 'Balanced'; Battery = $null; Uptime = [TimeSpan]::FromDays(9); MemTotalKB = 16000000; MemFreeKB = 1000000 }
+    $os = @{ Text = 'Windows 10 Home 22H2 (build 19045.6466)'; Build = '19045'; Ubr = 6466; IsWin11 = $false; Version = '22H2'; ProductName = 'Windows 10 Home'; Is64 = $true }
+    if ($script:Edition -eq 'Personal') {
+        Assert-That ($null -ne $script:Baseline) 'personal has a baseline'
+        $rows = @(Get-BaselineRows $facts $os $script:Baseline)
+        Assert-Equal 7 $rows.Count 'seven baseline rows'
+        foreach ($r in $rows) { Assert-That ($r[3] -like 'Matches*') ("{0} matches documented baseline ({1})" -f $r[0], $r[3]) }
+        $facts.MemConfigured = 2133
+        Assert-Equal 'Differs (XMP off?)' (@(Get-BaselineRows $facts $os $script:Baseline)[3][3]) 'XMP-off detection'
+    } else {
+        Assert-Equal $null $script:Baseline 'universal has no baseline'
+        $rows = @(Get-HardwareRows $facts $os)
+        Assert-That (@($rows | Where-Object { $_[0] -eq 'CPU' -and $_[1] -match '10 cores / 20 threads' }).Count -eq 1) 'cpu row'
+        Assert-That (@($rows | Where-Object { $_[0] -eq 'Graphics' }).Count -ge 1) 'gpu row'
+        Assert-That (@($rows | Where-Object { $_[0] -eq 'Memory' -and -not $_[3] }).Count -eq 1) 'XMP kit at 3600 above JEDEC 2133 is not flagged'
+        $facts.MemConfigured = 2400; $facts.MemRated = 3200
+        Assert-That (@(Get-HardwareRows $facts $os | Where-Object { $_[0] -eq 'Memory' -and $_[3] -match 'XMP/EXPO' }).Count -eq 1) 'below module rating is hinted'
+        $empty = @{ CpuName = $null; Cores = $null; Threads = $null; BaseMHz = $null; Board = $null; BiosVersion = $null; MemTotal = $null; Gpus = @(); SecureBoot = $null; Battery = $null }
+        Assert-That (@(Get-HardwareRows $empty $os).Count -ge 3) 'empty facts still render'
+    }
+    foreach ($o in @(@{ IsWin11 = $true; Version = '24H2'; ProductName = 'Windows 10 Pro' }, @{ IsWin11 = $false; Version = '22H2'; ProductName = 'Windows 10 Home' }, @{ IsWin11 = $false; Version = ''; ProductName = 'Windows Server 2022' })) {
+        $s = Get-WindowsSupportText $o
+        Assert-Equal 2 @($s).Count 'support text is (text, colour)'
+    }
+    Assert-That ((Get-WindowsSupportText @{ IsWin11 = $false; Version = '22H2'; ProductName = 'Windows 10 Home' })[0] -match '14 Oct 2025') 'win10 end of support'
+    $health = @(Get-HealthRows $facts @{ Any = $true; Text = 'Restart pending (Windows Update)' })
+    Assert-That (@($health | Where-Object { $_[0] -eq 'Uptime' -and $_[2] -eq 'Yellow' }).Count -eq 1) '9-day uptime flagged'
+    Assert-That (@($health | Where-Object { $_[0] -eq 'Memory' -and $_[2] -eq 'Yellow' }).Count -eq 1) '94% memory flagged'
+    Assert-That (@($health | Where-Object { $_[0] -eq 'Restart' -and $_[2] -eq 'Yellow' }).Count -eq 1) 'pending restart flagged'
+}
+
+Invoke-TestCase 'T46' 'Vivaldi, Opera and Opera GX: only their cache folders are touched' {
+    $viv = Join-Path $SB.LocalAppData 'Vivaldi\User Data'
+    New-TestFile (Join-Path $viv 'Default\Preferences') 10 500
+    New-TestFile (Join-Path $viv 'Default\Cache\Cache_Data\f_1') 100 500
+    New-TestFile (Join-Path $viv 'Default\Cookies') 10 500
+    $gx = Join-Path $SB.LocalAppData 'Opera Software\Opera GX Stable'
+    New-TestFile (Join-Path $gx 'Cache\Cache_Data\data_0') 300 500
+    New-TestFile (Join-Path $gx 'Other\keep.bin') 10 500
+    New-TestFile (Join-Path $gx 'Local State') 10 500
+    ${function:Test-BrowserRunning} = { param($Def) $false }
+    $v = Invoke-CategoryClean (Get-Category 'BrowserVivaldi')
+    Assert-Equal 'Completed' $v.Status 'vivaldi'
+    Assert-That ([IO.File]::Exists((Join-Path $viv 'Default\Cookies'))) 'vivaldi cookies kept'
+    $s = Invoke-CategoryScan (Get-Category 'BrowserOperaGX')
+    Assert-Equal 300 ([long]$s.Stats.EligibleBytes) 'opera gx estimate = Cache only'
+    $o = Invoke-CategoryClean (Get-Category 'BrowserOperaGX')
+    Assert-Equal 1 ([long]$o.Stats.Deleted) 'opera gx cache file deleted'
+    Assert-That ([IO.File]::Exists((Join-Path $gx 'Other\keep.bin')) -and [IO.File]::Exists((Join-Path $gx 'Local State'))) 'other opera files kept'
+    Assert-That (-not (Invoke-CategoryScan (Get-Category 'BrowserOpera')).Applicable) 'Opera (not installed) not applicable'
+    ${function:Test-BrowserRunning} = { param($Def) $Def.Process -eq 'opera' }
+    New-TestFile (Join-Path $gx 'Cache\Cache_Data\data_1') 300 500
+    Assert-Equal 'Skipped' (Invoke-CategoryClean (Get-Category 'BrowserOperaGX')).Status 'running opera skipped'
+    ${function:Test-BrowserRunning} = { param($Def) $false }
+}
+
+Invoke-TestCase 'T47' 'Selection screens list only categories that apply; the rest are named on one line' {
+    $cats = @(Get-Categories | Where-Object { $_.Group -eq 'Browser' })
+    $res = Invoke-ScanCategories $cats
+    $applicable = @($cats | Where-Object { $res[$_.Id].Applicable })
+    $notApplicable = @($cats | Where-Object { -not $res[$_.Id].Applicable })
+    Assert-That ($applicable.Count -gt 0 -and $notApplicable.Count -gt 0) 'mixed applicability in sandbox'
+    $origRC = ${function:Read-Choice}
+    ${function:Read-Choice} = { param([string[]]$Valid, [switch]$AllowEnter, [switch]$AllowEscape) 'ESC' }
+    try { $lines = Get-RenderedLines { $null = Show-SelectionScreen -Title 'T' -Cats $cats -Results $res -Selected @{} } } finally { ${function:Read-Choice} = $origRC }
+    $rows = @($lines | Where-Object { $_ -match '^\s+\[[A-Z]\]\s+(\[[ x]\]|-)' })
+    Assert-Equal $applicable.Count $rows.Count 'one keyed row per applicable category'
+    $na = ($lines | Where-Object { $_ -match 'Not applicable here' }) -join ' '
+    foreach ($c in $notApplicable) { Assert-That ($na -match [regex]::Escape($c.Name.Split(' ')[0])) ("hidden category named: " + $c.Name) }
+    foreach ($l in $lines) { Assert-That ($l.TrimEnd().Length -le 100) ("line too wide: " + $l) }
+}
+
+Invoke-TestCase 'T48' 'Shader caches follow the detected graphics vendor (NVIDIA LocalLow, AMD, Intel)' {
+    $saved = $script:GpuCache
+    try {
+        New-TestFile (Join-Path $SB.Profile 'AppData\LocalLow\NVIDIA\PerDriverVersion\DXCache\a.bin') 100 500
+        New-TestFile (Join-Path $SB.Profile 'AppData\LocalLow\Intel\ShaderCache\i.bin') 100 500
+        New-TestFile (Join-Path $SB.LocalAppData 'Intel\ShaderCache\j.bin') 100 500
+        New-TestFile (Join-Path $SB.LocalAppData 'AMD\DxcCache\d.bin') 100 500
+        New-TestFile (Join-Path $SB.LocalAppData 'AMD\GLCache\g.bin') 100 500
+        $script:GpuCache = @(@{ Name = 'NVIDIA GeForce RTX 4060'; Vendor = 'NVIDIA'; DriverVersion = ''; NvidiaVersion = $null; VramBytes = $null; DriverDate = $null; RefreshHz = $null; Pnp = '' })
+        Assert-That (-not (Invoke-CategoryScan (Get-Category 'ShaderIntel')).Applicable) 'Intel not offered on NVIDIA-only PC'
+        $n = Invoke-CategoryClean (Get-Category 'ShaderNvidia')
+        Assert-That (-not [IO.File]::Exists((Join-Path $SB.Profile 'AppData\LocalLow\NVIDIA\PerDriverVersion\DXCache\a.bin'))) 'NVIDIA PerDriverVersion cache cleaned'
+        Assert-That ([IO.File]::Exists((Join-Path $SB.Profile 'AppData\LocalLow\Intel\ShaderCache\i.bin'))) 'Intel cache untouched on NVIDIA PC'
+        $script:GpuCache = @(@{ Name = 'Intel(R) UHD Graphics 770'; Vendor = 'Intel'; DriverVersion = ''; NvidiaVersion = $null; VramBytes = $null; DriverDate = $null; RefreshHz = $null; Pnp = '' }, @{ Name = 'AMD Radeon RX 7800 XT'; Vendor = 'AMD'; DriverVersion = ''; NvidiaVersion = $null; VramBytes = $null; DriverDate = $null; RefreshHz = $null; Pnp = '' })
+        Assert-That (-not (Invoke-CategoryScan (Get-Category 'ShaderNvidia')).Applicable) 'NVIDIA not offered without NVIDIA GPU'
+        $i = Invoke-CategoryClean (Get-Category 'ShaderIntel')
+        Assert-Equal 2 ([long]$i.Stats.Deleted) 'Intel Local + LocalLow caches cleaned'
+        $a = Invoke-CategoryClean (Get-Category 'ShaderAmd')
+        Assert-That ([long]$a.Stats.Deleted -ge 2) 'AMD DxcCache + GLCache cleaned'
+    } finally { $script:GpuCache = $saved }
+}
+
+Invoke-TestCase 'T49' 'Riot products are detected generically and read-only' {
+    $pd = Join-Path $sandbox 'pd2'
+    $lol = Join-Path $sandbox 'Riot Games\League of Legends'
+    [void][IO.Directory]::CreateDirectory($lol)
+    foreach ($pair in @(@('league_of_legends.live', $lol), @('valorant.live', (Join-Path $sandbox 'nope\VALORANT\live')))) {
+        $y = Join-Path $pd ('Riot Games\Metadata\{0}\{0}.product_settings.yaml' -f $pair[0])
+        [void][IO.Directory]::CreateDirectory((Split-Path -Parent $y))
+        [IO.File]::WriteAllText($y, ('product_install_full_path: "' + ($pair[1] -replace '\\', '/') + '"' + "`n"))
+    }
+    $r = Get-RiotInventory -ProgramDataOverride $pd
+    $l = @($r.Products | Where-Object { $_.Name -eq 'League of Legends' })
+    Assert-That ($l.Count -eq 1 -and $l[0].Confirmed) 'League of Legends confirmed'
+    $v = @($r.Products | Where-Object { $_.Name -eq 'VALORANT' })
+    Assert-That ($v.Count -eq 1 -and -not $v[0].Confirmed) 'VALORANT without game files is only possible'
+}
+
+Invoke-TestCase 'T50' 'The BAT under test is exactly what src\Build-AiznmCleaner.ps1 produces (no drift between editions)' {
+    $build = Join-Path (Join-Path (Split-Path -Parent $BatPath) 'src') 'Build-AiznmCleaner.ps1'
+    if (-not [IO.File]::Exists($build)) { return 'SKIP: src folder not present next to the BAT' }
+    $out = Join-Path $sandbox 'rebuild'
+    [void][IO.Directory]::CreateDirectory($out)
+    $null = & $build -OutDir $out 6>&1
+    $rebuilt = Join-Path $out (Split-Path -Leaf $BatPath)
+    Assert-That ([IO.File]::Exists($rebuilt)) 'rebuilt file exists'
+    $a = [IO.File]::ReadAllBytes($rebuilt); $b = [IO.File]::ReadAllBytes($BatPath)
+    Assert-Equal $b.Length $a.Length 'same size'
+    for ($i = 0; $i -lt $a.Length; $i++) { if ($a[$i] -ne $b[$i]) { throw "differs at byte $i - rebuild the BAT files" } }
 }
 
 # ---------------------------------------------------------------- report

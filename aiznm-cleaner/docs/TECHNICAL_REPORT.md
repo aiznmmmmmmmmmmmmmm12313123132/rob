@@ -1,9 +1,10 @@
-# aiznm CLEANER 3.0.0 — Technical report
+# aiznm CLEANER 3.1.0 — Technical report
 
 Contents
 
 * [B. Audit of the original v2.0 script](#b-audit-of-the-original-v20-script)
-* [Architecture of 3.0.0](#architecture-of-300)
+* [Architecture](#architecture)
+* [Editions: Personal and Universal](#editions-personal-and-universal)
 * [C. Research notes and sources](#c-research-notes-and-sources)
 * [D. Safety matrix](#d-safety-matrix)
 * [G. Before/after reporting methodology](#g-beforeafter-reporting-methodology)
@@ -66,7 +67,7 @@ The whole of `aiznm CLEANER v2.0.bat` was read. It is preserved unchanged in
 
 ---
 
-## Architecture of 3.0.0
+## Architecture
 
 ```
 aiznm_CLEANER.bat
@@ -84,6 +85,13 @@ aiznm_CLEANER.bat
       6 elevation broker, selection/confirmation screens, cleanup run, report
       7 overview, inventory, reports, Windows tools, main menu
 ```
+
+Both `.bat` files are generated from the same parts in `src/` by
+`src/Build-AiznmCleaner.ps1`. The parts are concatenated, launcher
+placeholders are filled in, and the result is checked to be ASCII and saved
+with CRLF line endings. Only the small *edition profile* part differs
+between the two editions. Test T50 rebuilds from `src/` and fails if a
+shipped `.bat` differs by even one byte.
 
 **Why one self-contained `.bat`, and not a separate `.ps1`?** That's what
 you asked for, and it is workable: the PowerShell code is not squeezed into
@@ -105,6 +113,37 @@ JSON results and closes itself after 5 seconds. The normal window reads
 the results, deletes the exchange file and reports. Error 1223 (UAC
 cancelled) is reported as *Cancelled*. Any other failure is reported as
 *Failed*.
+
+---
+
+## Editions: Personal and Universal
+
+| Aspect | Personal (`aiznm_CLEANER.bat`) | Universal (`aiznm_CLEANER_Universal.bat`) |
+|---|---|---|
+| Edition profile | `$script:Baseline` holds the documented hardware of one PC | `$script:Baseline = $null` |
+| System overview, hardware | "documented baseline vs detected" (Matches / Differs / Not detected, including an XMP-off check against the documented DDR4-3600) | "as Windows reports it", with neutral hints: memory configured below its module rating (XMP/EXPO/DOCP may be off; never changed), BIOS age, GPU driver age, Secure Boot, battery |
+| Platform notes | The PCIe 3.0 note for B560 + i9-10900F, and the documented monitors | None (nothing is assumed) |
+| Everything else | Identical code | Identical code |
+
+What makes the shared code universal, and not tied to one PC:
+
+* **Graphics vendor.** Detected from PCI vendor IDs: 10DE NVIDIA, 1002 AMD,
+  8086 Intel. Each vendor's shader-cache category is only offered when that
+  vendor's adapter is present. Hybrid laptops (Intel + NVIDIA) get both.
+* **Windows version.** Builds of 22000 and above are named Windows 11. The
+  support line differs by version: Windows 10's end-of-support date, or a
+  pointer to Windows Update on Windows 11. Windows 11 gets the
+  `ms-settings:storagerecommendations` shortcut [C30].
+* **Folders.** Every path comes from known-folder APIs, never from a drive
+  letter. A redirected or unusual profile layout is refused, never guessed.
+* **Window size.** Width and height are adapted to the console. Narrow
+  windows drop the Files column, so rows never wrap.
+* **Architecture.** 64-bit Windows PowerShell is always used, via
+  `Sysnative` when launched from a 32-bit process. The Recycle Bin query has
+  both the x64 and the x86 structure layout.
+* **Not supported:** Windows 7 and 8.1 (Windows PowerShell 5.1 is not built
+  in, and both are out of support). The PowerShell version check refuses
+  with a message.
 
 ---
 
@@ -147,6 +186,11 @@ certain.
 | C23 | LiveKernelReports — Microsoft Tech Community and Eleven Forum threads **(community; no official Microsoft documentation found)** | These hold kernel live dumps, for example WATCHDOG for GPU timeouts, and can be large. Treated conservatively: admin, opt-in, `.dmp` files only, 14-day age rule. |
 | C24 | Thumbnail cache — Wikipedia "Windows thumbnail cache" **(search only)** | `%LOCALAPPDATA%\Microsoft\Windows\Explorer\thumbcache_*.db`, rebuilt on demand. |
 | C25 | PSScriptAnalyzer 1.23.0 compatibility profiles (`win-48_x64_10.0.17763.0_5.1.17763.316…framework`) | Used to check every command and .NET type against a Windows 10 + PowerShell 5.1 baseline. |
+| C26 | AMD shader cache folders — community reports, e.g. https://macmyths.com/amd-shader-cache-what-it-does-and-how-to-reset-it-safely/ and https://mundobytes.com/shader-cache-corrupta/ **(community; no official AMD path list found)** | `%LOCALAPPDATA%\AMD\DxCache`, `\DxcCache` (DX12) and `\GLCache`. A `VkCache` folder could not be confirmed, so it is not included. AMD Software's own "Reset Shader Cache" button is mentioned as the vendor route. |
+| C27 | Intel shader cache — https://learn.microsoft.com/en-us/answers/a/7789987 (Microsoft Q&A) and https://rtech.support/guides/clearing-shader-cache/ **(search only / community)** | Sources disagree between `%LOCALAPPDATA%\Intel\ShaderCache` and `...\LocalLow\Intel\ShaderCache`, so both are handled (each only if present). |
+| C28 | NVIDIA per-driver cache — https://github.com/Kkthnx/NvidiaShaderCleanup and https://forums.flightsimulator.com/t/nvidia-shader-cache-folder-gone/613487 **(community)** | Newer drivers (reported from 545.xx) use `%USERPROFILE%\AppData\LocalLow\NVIDIA\PerDriverVersion\DXCache` and `\GLCache`. Added alongside the older Local folders. The legacy `%ProgramData%\NVIDIA Corporation\NV_Cache` is not touched. |
+| C29 | Opera GX cache location — Opera forum posts, e.g. https://forums.opera.com/post/311015 **(community)** | The cache is under `%LOCALAPPDATA%\Opera Software\Opera GX Stable\Cache\Cache_Data`. Cookies, IndexedDB and sessions are under Roaming. So only the Local `Cache` folder is cleaned, for Opera and Opera GX. |
+| C30 | ms-settings URIs (Windows app docs source) — https://learn.microsoft.com/windows/apps/develop/launch/launch-settings | "Storage recommendations" is `ms-settings:storagerecommendations`. It is offered on Windows 11 only. |
 
 Things that could **not** be verified, and how the code copes:
 
@@ -172,11 +216,13 @@ future timestamps count as recent. "Kept" items are never deleted.
 | Windows temporary files | SYSTEM-level leftovers | `%SystemRoot%\Temp` | **On** (UAC when run) | Admin | Low | No | Same | ≥7 days old; folders kept; skipped during installs/servicing or while a Windows Update restart is pending; verified-handle deletes only |
 | Thumbnail cache | Explorer thumbnails | `%LOCALAPPDATA%\Microsoft\Windows\Explorer\thumbcache_*.db` | Off | User | Low | Rebuilt automatically | Any file locked means the whole category is skipped; Explorer never closed | Exact filename pattern; not recursive |
 | Delivery Optimization cache | Update pieces kept for peer sharing | Via `Delete-DeliveryOptimizationCache -Force` (no manual folder deletion) | Off | Admin | Low | Re-downloaded if needed | Handled by Windows | Pinned content kept; re-measured after |
-| Edge / Chrome / Brave cache | Browser disk caches | `%LOCALAPPDATA%\<vendor>\User Data\<profile>\{Cache, Code Cache, GPUCache}` (profiles = folders with `Preferences`) | Off (menu 5 preselects installed, closed browsers) | User | Low | Rebuilt while browsing | Browser running means the category is skipped; otherwise locked files are skipped | Cookies, logins, history, bookmarks, sessions, extensions and website storage untouched |
+| Edge / Chrome / Brave / Vivaldi cache | Browser disk caches | `%LOCALAPPDATA%\<vendor>\User Data\<profile>\{Cache, Code Cache, GPUCache}` (profiles = folders with `Preferences`) | Off (menu 5 preselects installed, closed browsers) | User | Low | Rebuilt while browsing | Browser running means the category is skipped; otherwise locked files are skipped | Cookies, logins, history, bookmarks, sessions, extensions and website storage untouched |
+| Opera / Opera GX cache | Browser disk cache | `%LOCALAPPDATA%\Opera Software\{Opera Stable, Opera GX Stable}\Cache` | Off (menu 5 preselects installed, closed browsers) | User | Low | Rebuilt while browsing | `opera.exe` running means the category is skipped | The Roaming profile (cookies, logins, sessions) is never touched |
 | Firefox cache | Browser disk cache | `%LOCALAPPDATA%\Mozilla\Firefox\Profiles\<p>\{cache2, startupCache}` | Off | User | Low | Rebuilt | Same | Roaming profile untouched |
 | DirectX shader cache | Compiled shaders | `%LOCALAPPDATA%\D3DSCache` | Off | User | **Medium** (temporary stutter) | Rebuilt while playing | Skipped while a known game runs; locked files skipped | No FPS claims |
-| NVIDIA shader cache | Driver-compiled shaders | `%LOCALAPPDATA%\NVIDIA\DXCache`, `\GLCache` | Off; requires NVIDIA GPU | User | **Medium** | Rebuilt | Same | |
-| AMD shader cache | Driver-compiled shaders | `%LOCALAPPDATA%\AMD\DxCache` | Off; **only with an AMD GPU** (not on this PC) | User | Medium | Rebuilt | Same | Folder left alone on NVIDIA PCs |
+| NVIDIA shader cache | Driver-compiled shaders | `%LOCALAPPDATA%\NVIDIA\DXCache`, `\GLCache`; `%USERPROFILE%\AppData\LocalLow\NVIDIA\PerDriverVersion\DXCache`, `\GLCache` | Off; requires NVIDIA GPU | User | **Medium** | Rebuilt | Same | |
+| AMD shader cache | Driver-compiled shaders | `%LOCALAPPDATA%\AMD\DxCache`, `\DxcCache`, `\GLCache` | Off; **only with an AMD GPU** | User | Medium | Rebuilt | Same | Folders left alone on PCs without AMD graphics |
+| Intel graphics shader cache | Driver-compiled shaders | `%LOCALAPPDATA%\Intel\ShaderCache`; `%USERPROFILE%\AppData\LocalLow\Intel\ShaderCache` | Off; **only with an Intel GPU** | User | Medium | Rebuilt | Same | Folders left alone on PCs without Intel graphics |
 | App crash dumps (old) | WER local dumps | `%LOCALAPPDATA%\CrashDumps\*.dmp` | Off | User | **Medium** (lose diagnostics) | No | Skipped | ≥14 days old; not recursive; custom folders only reported |
 | Error reports - user (old) | WER report folders | `%LOCALAPPDATA%\Microsoft\Windows\WER\ReportArchive`, `\ReportQueue` | Off | User | Low | No | Skipped | ≥14 days old; empty old report folders removed |
 | Error reports - system (old) | WER report folders | `%ProgramData%\Microsoft\Windows\WER\ReportArchive`, `\ReportQueue` | Off | Admin | Low | No | Skipped | ≥14 days old; verified-handle deletes |
@@ -251,10 +297,18 @@ and all game and launcher folders.
   at restart (by design).
 * The behaviour of Delivery Optimization's cmdlets is not described by
   Microsoft (C11). LiveKernelReports has no official documentation (C23).
-* Not handled: Microsoft Store builds of Firefox; Opera and Vivaldi caches;
-  NVIDIA's `LocalLow\NVIDIA\PerDriverVersion` caches; game-specific shader
-  caches, such as Steam's `shadercache` (they belong to game folders, which
-  are off-limits).
+* Not handled: Microsoft Store builds of Firefox; Edge Beta/Dev/Canary and
+  other browser channels; game-specific shader caches, such as Steam's
+  `shadercache` (they belong to game folders, which are off-limits).
+* The AMD, Intel, newer-NVIDIA and Opera cache folder locations come from
+  community sources (C26 to C29), not vendor documentation. A folder that
+  doesn't exist simply shows "not present". None of them is cleaned without
+  your selection.
+* Universal edition: it was built to run on any Windows 10/11 PC, but it has
+  only been tested in the Linux sandbox described in `TEST_REPORT.md`, like
+  the Personal edition. Windows on ARM, Windows Server and non-English
+  Windows are expected to work (no text output is parsed, except the power
+  plan name in brackets), but have not been run.
 * The inventory only knows games from Steam, Epic and Riot manifests, plus
   launchers listed in Windows' installed-apps registry. Xbox and Microsoft
   Store game sizes, and games installed by hand, are not detected. Riot,
